@@ -1,0 +1,8 @@
+# user generated files
+*.png
+*parameters.txt
+*.xlsx
+*.avi
+
+# ipython temp files
+.ipynb_checkpoints
