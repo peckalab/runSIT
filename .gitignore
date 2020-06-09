@@ -4,6 +4,7 @@
 *parameters.json
 *.xlsx
 *.avi
+sessions*
 
 # ipython temp files
 .ipynb_checkpoints
