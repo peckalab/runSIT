@@ -24,12 +24,11 @@ Once the environment has been activated, install R, its essentials, and the kern
 
 Finally, for the notebooks to run, you will have to install additional python modules and R libraries and their dependencies to your environment. Notebooks may not run smoothly, if the wrong versions of the modules are installed. Especially having the wrong versions of openCV can cause trouble, which is why we provide the Jupyter notebooks that run on Python 3 for two different versions of openCV (3.4.2 & 4.0.1). The code below will install the latest version of the modules/libraries to your environment. Version numbers in brackets are the latest module/library versions the notebooks were tested with (5th of Febuary, 2020).
 
-**Python modules:** numpy (1.18.1), openCV (3.4.2 or 4.0.1), tkinter (8.6.8), xlxswriter (1.2.7), scipy (1.3.2), sounddevice (0.3.14), pyfirmata (1.1.0)
+**Python modules:** numpy (1.18.1), openCV (3.4.2 or 4.0.1), tkinter (8.6.8), scipy (1.3.2), sounddevice (0.3.14), pyfirmata (1.1.0)
 
     conda install numpy
     conda install opencv
     conda install tk
-    conda install xlsxwriter
     conda install scipy
     conda install -c conda-forge python-sounddevice
     conda install -c conda-forge pyfirmata
@@ -47,11 +46,14 @@ To work with the different notebooks, select the folder to which you downloaded 
 
 ## Authors
 
-* **Daniel Schmidtke** 
+* **Daniel Schmidtke**
+* **Diana Amaro**
+* **Andrey Sobolev**
 
 ## License
 
-This project is licensed under the MIT License (see the license file **TODO** for details). 
+This project is licensed under the MIT License (see the license file for details).
+
 ## Acknowledgments
 
 * The implemented tracking algorithm was inspired by **colinlaney**'s animal-tracking at: https://github.com/colinlaney/animal-tracking
