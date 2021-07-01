@@ -5,6 +5,7 @@
 *.xlsx
 *.avi
 sessions*
+settings_*
 
 # ipython temp files
 .ipynb_checkpoints
