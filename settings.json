@@ -11,12 +11,12 @@
     "experiment_type": "aSIT",
     "background_color": "T",
     "init_duration": 0.2,
-    "resolution_x": 1200,
-    "resolution_y": 880,    
-    "arena_x": 650,
-    "arena_y": 500,
-    "arena_radius": 430,
+    "resolution_x": 1024,
+    "resolution_y": 768,
+    "arena_x": 512,
+    "arena_y": 384,
+    "arena_radius": 350,
     "distractor_island": 0,
     "capture_background": false,
-    "MCSArduinoPort": "COM10"    
+    "MCSArduinoPort": "COM10"
 }
