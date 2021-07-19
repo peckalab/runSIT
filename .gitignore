@@ -9,3 +9,6 @@ settings_*
 
 # ipython temp files
 .ipynb_checkpoints
+
+# log files
+*_log.*
