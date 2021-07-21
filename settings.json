@@ -1,22 +1,50 @@
 {
-    "trial_number": 50,
-    "session_duration": 3600,
-    "trial_duration": 60,
-    "start_radius": 67,
-    "start_x": 195,
-    "start_y": 195,
-    "target_radius": 80,
-    "target_duration": 5,
-    "subject": "003901",
-    "experiment_type": "aSIT",
-    "background_color": "T",
-    "init_duration": 0.2,
-    "resolution_x": 1024,
-    "resolution_y": 768,
-    "arena_x": 512,
-    "arena_y": 384,
-    "arena_radius": 350,
-    "distractor_island": 0,
-    "capture_background": false,
-    "MCSArduinoPort": "COM10"
+    "camera": {
+        "source": 0,
+        "frame_width": 1024,
+        "frame_height": 768,
+        "fps": 20,
+        "api": "",
+        "verbose": true
+    },
+    "video": {
+        "fps": 20,
+        "file_path": "video.avi"
+    },
+    "position": {
+        "background_file": "background.png",
+        "arena_x": 512,
+        "arena_y": 384,
+        "arena_radius": 350,
+        "log_file": "positions.csv"
+    },
+    "sound": {
+        "frequencies": [440, 880],
+        "pulse_duration": 0.05,
+        "sample_rate": 44100,
+        "latency": 0.25,
+        "volume": 0.75,
+        "file_path": "sounds.csv"
+    },
+    "experiment": {
+        "trial_number": 50,
+        "session_duration": 3600,
+        "trial_duration": 60,
+        "start_radius": 67,
+        "start_x": 195,
+        "start_y": 195,
+        "target_radius": 80,
+        "target_duration": 5,
+        "subject": "003901",
+        "experiment_type": "aSIT",
+        "background_color": "T",
+        "init_duration": 0.2,
+        "arena_x": 512,
+        "arena_y": 384,
+        "arena_radius": 350,
+        "distractor_island": 0,
+        "capture_background": false,
+        "MCSArduinoPort": "COM10",
+        "file_path": "events.csv"
+    }
 }

@@ -12,3 +12,7 @@ settings_*
 
 # log files
 *_log.*
+
+
+# cache
+*__pycache__*
