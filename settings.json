@@ -19,7 +19,7 @@
         "log_file": "positions.csv"
     },
     "sound": {
-        "frequencies": [440, 880],
+        "frequencies": [440, 880, 1240, 6000],
         "pulse_duration": 0.05,
         "sample_rate": 44100,
         "latency": 0.25,
