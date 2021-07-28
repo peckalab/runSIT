@@ -12,6 +12,7 @@ settings_*
 
 # log files
 *_log.*
+*.csv
 
 
 # cache
