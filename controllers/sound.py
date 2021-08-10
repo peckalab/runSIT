@@ -1,5 +1,7 @@
 import numpy as np
 import time
+from scipy.signal import lfilter
+
 
 class SoundController:
     # https://python-sounddevice.readthedocs.io/en/0.3.15/api/streams.html#sounddevice.OutputStream
@@ -38,9 +40,21 @@ class SoundController:
 
     @classmethod
     def get_tone_stack(cls, cfg):
+        # silence
         silence = np.zeros(2, dtype='float32')
         sounds = {0: np.column_stack([silence for x in range(cfg['n_channels'])])}
 
+        # noise
+        filter_a = np.array([0.0075, 0.0225, 0.0225, 0.0075])
+        filter_b = np.array([1.0000,-2.1114, 1.5768,-0.4053])
+
+        noise = np.random.randn(int(0.25 * cfg['sample_rate']))  # 250ms of noise
+        noise = lfilter(filter_a, filter_b, noise)
+        noise = noise / np.abs(noise).max() * 0.5
+        noise = noise.astype(np.float32)
+        sounds[-1] = np.column_stack([noise for x in range(cfg['n_channels'])])
+        
+        # all other sounds
         for i, snd in enumerate(cfg['sounds']):
             tone = cls.get_pure_tone(snd['freq'], cfg['pulse_duration'], cfg['sample_rate']) * cfg['volume']
             tone = tone * cls.get_cos_window(tone, 0.01, cfg['sample_rate'])  # onset / offset
@@ -86,6 +100,7 @@ class SoundController:
                     continue
 
                 roving = 10**((np.random.rand() * cfg['roving'] - cfg['roving']/2.0)/20.)
+                roving = roving if int(selector.value) > -1 else 1  # no roving for noise
                 stream.write(sounds[int(selector.value)] * roving)
                 with open(cfg['file_path'], 'a') as f:
                     f.write(",".join([str(x) for x in (t0, selector.value)]) + "\n")
