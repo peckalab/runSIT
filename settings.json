@@ -4,7 +4,7 @@
         "frame_width": 1024,
         "frame_height": 768,
         "fps": 20,
-        "api": "",
+        "api": 700,
         "verbose": true
     },
     "video": {
@@ -12,39 +12,46 @@
         "file_path": "video.avi"
     },
     "position": {
-        "background_file": "background.png",
-        "arena_x": 512,
-        "arena_y": 384,
-        "arena_radius": 350,
-        "log_file": "positions.csv"
+        "background_file": "background_dark.png",
+        "arena_x": 522,
+        "arena_y": 372,
+        "arena_radius": 330,
+        "floor_radius": 287,
+        "max_fps": 50,
+        "file_path": "positions.csv"
     },
     "sound": {
-        "frequencies": [440, 880, 1240, 6000],
+        "device": [1, 26],
+        "n_channels": 4,
+        "sounds": [
+            {"freq": 20000, "amp": 0.13, "channels": [1, 3]},
+            {"freq": 660, "amp": 0.05, "channels": [1, 3]}, 
+            {"freq": 860, "amp": 0.15, "channels": [1, 3]}, 
+            {"freq": 1060, "amp": 0.25, "channels": [1, 3]},
+            {"freq": 1320, "amp": 0.2, "channels": [1, 3]}, 
+            {"freq": 20000, "amp": 0.55, "channels": [1, 3]},
+            {"freq": 20, "amp": 0.01, "channels": [1, 3]}
+        ],
         "pulse_duration": 0.05,
         "sample_rate": 44100,
         "latency": 0.25,
-        "volume": 0.75,
+        "volume": 0.7,
+        "roving": 5.0,
         "file_path": "sounds.csv"
     },
     "experiment": {
-        "trial_number": 50,
-        "session_duration": 3600,
+        "trial_number": 60,
+        "session_duration": 600,
         "trial_duration": 60,
-        "start_radius": 67,
-        "start_x": 195,
-        "start_y": 195,
         "target_radius": 80,
-        "target_duration": 5,
-        "subject": "003901",
+        "target_duration": 6,
+        "subject": "47",
         "experiment_type": "aSIT",
         "background_color": "T",
         "init_duration": 0.2,
-        "arena_x": 512,
-        "arena_y": 384,
-        "arena_radius": 350,
         "distractor_island": 0,
         "capture_background": false,
-        "MCSArduinoPort": "COM10",
+        "MCSArduinoPort": "fake",
         "file_path": "events.csv"
     }
 }
