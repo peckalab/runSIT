@@ -8,14 +8,15 @@ class SoundController:
     
     default_cfg = {
         "device": [1, 26],
-        "n_channels": 4,
+        "n_channels": 10,
         "sounds": [
-            {"freq": 460, "amp": 0.13, "channels": [1, 3]},
-            {"freq": 660, "amp": 0.05, "channels": [1, 3]}, 
+            {"freq": 10000, "amp": 0.13, "channels": [6]},
+            {"freq": 660, "amp": 0.05, "channels": [6]}, 
             {"freq": 860, "amp": 0.15, "channels": [1, 3]}, 
             {"freq": 1060, "amp": 0.25, "channels": [1, 3]},
             {"freq": 1320, "amp": 0.2, "channels": [1, 3]}, 
-            {"freq": 20000, "amp": 0.55, "channels": [1, 3]}
+            {"freq": 20000, "amp": 0.55, "channels": [1, 3]},
+            {"freq": 20, "amp": 0.01, "channels": [1, 3]}
         ],
         "pulse_duration": 0.05,
         "sample_rate": 44100,
@@ -83,7 +84,7 @@ class SoundController:
 
         sd.default.device = cfg['device']
         sd.default.samplerate = cfg['sample_rate']
-        stream = sd.OutputStream(samplerate=cfg['sample_rate'], channels=4, dtype='float32', blocksize=256)
+        stream = sd.OutputStream(samplerate=cfg['sample_rate'], channels=cfg['n_channels'], dtype='float32', blocksize=256)
         stream.start()
 
         next_beat = time.time() + cfg['latency']
