@@ -1,11 +1,11 @@
 # user generated files
 *.png
 *parameters.txt
-*parameters.json
 *.xlsx
 *.avi
 sessions*
-settings_*
+*.json
+!default.json
 
 # ipython temp files
 .ipynb_checkpoints
