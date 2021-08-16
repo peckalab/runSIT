@@ -53,7 +53,11 @@ class SoundController:
         noise = lfilter(filter_a, filter_b, noise)
         noise = noise / np.abs(noise).max() * 0.5
         noise = noise.astype(np.float32)
-        sounds[-1] = np.column_stack([noise for x in range(cfg['n_channels'])])
+        empty = np.zeros(len(noise), dtype='float32')
+        
+        res = np.column_stack([empty for x in range(cfg['n_channels'])])
+        res[:, 5] = noise  # only from the top channel - TODO make configurable!
+        sounds[-1] = res
         
         # all other sounds
         for i, snd in enumerate(cfg['sounds']):
