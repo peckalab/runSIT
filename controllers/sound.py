@@ -9,15 +9,14 @@ class SoundController:
     default_cfg = {
         "device": [1, 26],
         "n_channels": 10,
-        "sounds": [
-            {"freq": 10000, "amp": 0.13, "channels": [6]},
-            {"freq": 660, "amp": 0.05, "channels": [6]}, 
-            {"freq": 860, "amp": 0.15, "channels": [1, 3]}, 
-            {"freq": 1060, "amp": 0.25, "channels": [1, 3]},
-            {"freq": 1320, "amp": 0.2, "channels": [1, 3]}, 
-            {"freq": 20000, "amp": 0.55, "channels": [1, 3]},
-            {"freq": 20, "amp": 0.01, "channels": [1, 3]}
-        ],
+        "sounds": {
+            "noise": {"amp": 0.5, "channels": [6]},
+            "background": {"freq": 10000, "amp": 0.23, "channels": [6]},
+            "target": {"freq": 660, "amp": 0.15, "channels": [6]}, 
+            "distractor1": {"freq": 860, "amp": 0.15, "channels": [1, 3], "enabled": False},
+            "distractor2": {"freq": 1060, "amp": 0.25, "channels": [1, 3], "enabled": False},
+            "distractor3": {"freq": 1320, "amp": 0.2, "channels": [1, 3], "enabled": False}
+        },
         "pulse_duration": 0.05,
         "sample_rate": 44100,
         "latency": 0.25,
@@ -43,7 +42,7 @@ class SoundController:
     def get_tone_stack(cls, cfg):
         # silence
         silence = np.zeros(2, dtype='float32')
-        sounds = {0: np.column_stack([silence for x in range(cfg['n_channels'])])}
+        sounds = {'silence': np.column_stack([silence for x in range(cfg['n_channels'])])}
 
         # noise
         filter_a = np.array([0.0075, 0.0225, 0.0225, 0.0075])
@@ -51,26 +50,27 @@ class SoundController:
 
         noise = np.random.randn(int(0.25 * cfg['sample_rate']))  # 250ms of noise
         noise = lfilter(filter_a, filter_b, noise)
-        noise = noise / np.abs(noise).max() * 0.5
+        noise = noise / np.abs(noise).max() * cfg['sounds']['noise']['amp']
         noise = noise.astype(np.float32)
-        empty = np.zeros(len(noise), dtype='float32')
-        
-        res = np.column_stack([empty for x in range(cfg['n_channels'])])
-        res[:, 5] = noise  # only from the top channel - TODO make configurable!
-        sounds[-1] = res
+        empty = np.zeros((len(noise), cfg['n_channels']), dtype='float32')
+        for ch in cfg['sounds']['noise']['channels']:
+            empty[:, ch-1] = noise
+        sounds['noise'] = empty
         
         # all other sounds
-        for i, snd in enumerate(cfg['sounds']):
+        for key, snd in cfg['sounds'].items():
+            if key == 'noise' or ('enabled' in snd and not snd['enabled']):
+                continue  # skip noise or unused sounds
+                
             tone = cls.get_pure_tone(snd['freq'], cfg['pulse_duration'], cfg['sample_rate']) * cfg['volume']
             tone = tone * cls.get_cos_window(tone, 0.01, cfg['sample_rate'])  # onset / offset
-            tone = tone * snd['amp']
+            tone = tone * snd['amp']  # amplitude
             
             sound = np.zeros([len(tone), cfg['n_channels']], dtype='float32')
             for j in snd['channels']:
                 sound[:, j-1] = tone
            
-            sounds[i + 1] = sound
-            #sounds[i + 1] = np.column_stack((nothing, tone, tone, tone))
+            sounds[key] = sound
 
         return sounds
         
@@ -83,6 +83,16 @@ class SoundController:
         import sounddevice as sd  # must be inside the function
         import numpy as np
         import time
+        
+        commutator = {
+            -1: 'noise',
+            0:  'silence',
+            1:  'background',
+            2:  'target',
+            3:  'distractor1',
+            4:  'distractor2',
+            5:  'distractor3'
+        }
         
         sounds = cls.get_tone_stack(cfg)
 
@@ -101,19 +111,19 @@ class SoundController:
                 if t0 < next_beat:
                     #time.sleep(0.0001)  # not to spin the wheels too much
                     if stream.write_available > 2:
-                        stream.write(sounds[0])  # silence
+                        stream.write(sounds['silence'])  # silence
                     continue
 
                 roving = 10**((np.random.rand() * cfg['roving'] - cfg['roving']/2.0)/20.)
                 roving = roving if int(selector.value) > -1 else 1  # no roving for noise
-                stream.write(sounds[int(selector.value)] * roving)
+                stream.write(sounds[commutator[int(selector.value)]] * roving)
                 with open(cfg['file_path'], 'a') as f:
                     f.write(",".join([str(x) for x in (t0, selector.value)]) + "\n")
 
                 next_beat += cfg['latency']
                 
                 if stream.write_available > 2:
-                    stream.write(sounds[0])  # silence
+                    stream.write(sounds['silence'])  # silence
             
             else:  # idle state
                 next_beat = time.time() + cfg['latency']
