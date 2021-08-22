@@ -14,25 +14,28 @@
     "position": {
         "background_light": "background_light.png",
         "background_dark": "background_dark.png",
+        "threshold": 40,
         "arena_x": 522,
         "arena_y": 372,
         "arena_radius": 330,
         "floor_radius": 287,
         "max_fps": 50,
-        "file_path": "positions.csv"
+        "file_path": "positions.csv",
+        "floor_r_in_meters": 0.46,
+        "flip_x": true,
+        "flip_y": false
     },
     "sound": {
         "device": [1, 26],
-        "n_channels": 4,
-        "sounds": [
-            {"freq": 10000, "amp": 0.13, "channels": [1, 3]},
-            {"freq": 660, "amp": 0.05, "channels": [1, 3]}, 
-            {"freq": 860, "amp": 0.15, "channels": [1, 3]}, 
-            {"freq": 1060, "amp": 0.25, "channels": [1, 3]},
-            {"freq": 1320, "amp": 0.2, "channels": [1, 3]}, 
-            {"freq": 20000, "amp": 0.55, "channels": [1, 3]},
-            {"freq": 20, "amp": 0.01, "channels": [1, 3]}
-        ],
+        "n_channels": 10,
+        "sounds": {
+            "noise": {"amp": 0.5, "channels": [6]},
+            "background": {"freq": 10000, "amp": 0.23, "channels": [6]},
+            "target": {"freq": 660, "amp": 0.15, "channels": [6]},
+            "distractor1": {"freq": 860, "amp": 0.15, "channels": [1, 3], "enabled": false},
+            "distractor2": {"freq": 1060, "amp": 0.25, "channels": [1, 3], "enabled": false},
+            "distractor3": {"freq": 1320, "amp": 0.2, "channels": [1, 3], "enabled": false}
+        },
         "pulse_duration": 0.05,
         "sample_rate": 44100,
         "latency": 0.25,
@@ -41,18 +44,16 @@
         "file_path": "sounds.csv"
     },
     "experiment": {
-        "trial_number": 60,
-        "session_duration": 600,
+        "trial_number": 600,
+        "session_duration": 1800,
         "trial_duration": 60,
-        "target_radius": 80,
+        "target_radius": 0.13,
         "target_duration": 6,
         "subject": "47",
         "experiment_type": "aSIT",
-        "background_color": "T",
-        "init_duration": 0.2,
         "distractor_island": 0,
-        "capture_background": false,
         "MCSArduinoPort": "COM10",
+        "feeder_port": "COM8",
         "file_path": "events.csv",
         "light_events": []
     }
