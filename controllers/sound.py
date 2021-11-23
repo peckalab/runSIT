@@ -1,6 +1,7 @@
 import numpy as np
 import time
 from scipy.signal import lfilter
+from functools import reduce
 
 
 class SoundController:
@@ -11,11 +12,11 @@ class SoundController:
         "n_channels": 10,
         "sounds": {
             "noise": {"amp": 0.5, "channels": [6]},
-            "background": {"freq": 10000, "amp": 0.23, "channels": [6]},
-            "target": {"freq": 660, "amp": 0.15, "channels": [6]}, 
-            "distractor1": {"freq": 860, "amp": 0.15, "channels": [1, 3], "enabled": False},
-            "distractor2": {"freq": 1060, "amp": 0.25, "channels": [1, 3], "enabled": False},
-            "distractor3": {"freq": 1320, "amp": 0.2, "channels": [1, 3], "enabled": False}
+            "background": {"freq": 10000, "amp": 0.23, "harmonics": True, "channels": [6]},
+            "target": {"freq": 660, "amp": 0.15, "harmonics": True, "channels": [6]}, 
+            "distractor1": {"freq": 860, "amp": 0.15, "harmonics": True, "channels": [1, 3], "enabled": False},
+            "distractor2": {"freq": 1060, "amp": 0.25, "harmonics": True, "channels": [1, 3], "enabled": False},
+            "distractor3": {"freq": 1320, "amp": 0.2, "harmonics": True, "channels": [1, 3], "enabled": False}
         },
         "pulse_duration": 0.05,
         "sample_rate": 44100,
@@ -30,6 +31,14 @@ class SoundController:
         x = np.linspace(0, duration * freq * 2*np.pi, int(duration*sample_rate), dtype=np.float32)
         return np.sin(x)
 
+    @classmethod
+    def get_harm_stack(cls, base_freq, duration, threshold=1500, sample_rate=44100):
+        harmonics = [x * base_freq for x in np.arange(20) + 2 if x * base_freq < threshold]  # first 20 enouch
+        freqs = [base_freq] + harmonics
+        x = np.linspace(0, duration, int(sample_rate * duration))
+        y = reduce(lambda x, y: x + y, [(1./(i+1)) * np.sin(base_freq * 2 * np.pi * x) for i, base_freq in enumerate(freqs)])
+        return y / y.max()  # norm to -1 to 1
+    
     @classmethod
     def get_cos_window(cls, tone, win_duration, sample_rate=44100):
         x = np.linspace(0, np.pi/2, int(win_duration * sample_rate), dtype=np.float32)
@@ -62,7 +71,10 @@ class SoundController:
             if key == 'noise' or ('enabled' in snd and not snd['enabled']):
                 continue  # skip noise or unused sounds
                 
-            tone = cls.get_pure_tone(snd['freq'], cfg['pulse_duration'], cfg['sample_rate']) * cfg['volume']
+            if snd['harmonics']:
+                tone = cls.get_harm_stack(snd['freq'], cfg['pulse_duration'], sample_rate=cfg['sample_rate']) * cfg['volume']
+            else:
+                tone = cls.get_pure_tone(snd['freq'], cfg['pulse_duration'], cfg['sample_rate']) * cfg['volume']
             tone = tone * cls.get_cos_window(tone, 0.01, cfg['sample_rate'])  # onset / offset
             tone = tone * snd['amp']  # amplitude
             
