@@ -91,7 +91,9 @@ class SoundController:
             2:  'target',
             3:  'distractor1',
             4:  'distractor2',
-            5:  'distractor3'
+            5:  'distractor3',
+            6:  'distractor4',
+            7:  'distractor5'
         }
         
         sounds = cls.get_tone_stack(cfg)
