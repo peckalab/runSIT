@@ -11,12 +11,12 @@ class SoundController:
         "device": [1, 26],
         "n_channels": 10,
         "sounds": {
-            "noise": {"amp": 0.5, "channels": [6]},
-            "background": {"freq": 10000, "amp": 0.23, "harmonics": True, "channels": [6]},
-            "target": {"freq": 660, "amp": 0.15, "harmonics": True, "channels": [6]}, 
-            "distractor1": {"freq": 860, "amp": 0.15, "harmonics": True, "channels": [1, 3], "enabled": False},
-            "distractor2": {"freq": 1060, "amp": 0.25, "harmonics": True, "channels": [1, 3], "enabled": False},
-            "distractor3": {"freq": 1320, "amp": 0.2, "harmonics": True, "channels": [1, 3], "enabled": False}
+            "noise": {"amp": 0.5, "channels": [6, 8]},
+            "background": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": true, "channels": [1, 8]},
+            "target": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": true, "channels": [3, 8]}, 
+            "distractor1": {"freq": 860, "amp": 0.15, "duration": 0.05, "harmonics": true, "channels": [6, 8], "enabled": false},
+            "distractor2": {"freq": 1060, "amp": 0.25, "duration": 0.05, "harmonics": true, "channels": [6, 8], "enabled": false},
+            "distractor3": {"freq": 1320, "amp": 0.2, "duration": 0.05, "harmonics": true, "channels": [6, 8], "enabled": false}
         },
         "pulse_duration": 0.05,
         "sample_rate": 44100,
@@ -72,9 +72,9 @@ class SoundController:
                 continue  # skip noise or unused sounds
                 
             if snd['harmonics']:
-                tone = cls.get_harm_stack(snd['freq'], cfg['pulse_duration'], sample_rate=cfg['sample_rate']) * cfg['volume']
+                tone = cls.get_harm_stack(snd['freq'], snd['duration'], sample_rate=cfg['sample_rate']) * cfg['volume']
             else:
-                tone = cls.get_pure_tone(snd['freq'], cfg['pulse_duration'], cfg['sample_rate']) * cfg['volume']
+                tone = cls.get_pure_tone(snd['freq'], snd['duration'], cfg['sample_rate']) * cfg['volume']
             tone = tone * cls.get_cos_window(tone, 0.01, cfg['sample_rate'])  # onset / offset
             tone = tone * snd['amp']  # amplitude
             
