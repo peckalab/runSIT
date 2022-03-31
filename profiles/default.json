@@ -61,7 +61,7 @@
         "file_path": "events.csv",
         "light_events": [10000, 10000],
         "phi_max": 45,
-        "timepoints": [5100, 5200, 5300, 5400],
+        "timepoints": [15100, 15200, 15300, 15400],
         "iti_distance": 2.0,
         "iti_duration": 20,
         "punishment_duration": 10,

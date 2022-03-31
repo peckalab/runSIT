@@ -12,11 +12,11 @@ class SoundController:
         "n_channels": 10,
         "sounds": {
             "noise": {"amp": 0.5, "channels": [6, 8]},
-            "background": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": true, "channels": [1, 8]},
-            "target": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": true, "channels": [3, 8]}, 
-            "distractor1": {"freq": 860, "amp": 0.15, "duration": 0.05, "harmonics": true, "channels": [6, 8], "enabled": false},
-            "distractor2": {"freq": 1060, "amp": 0.25, "duration": 0.05, "harmonics": true, "channels": [6, 8], "enabled": false},
-            "distractor3": {"freq": 1320, "amp": 0.2, "duration": 0.05, "harmonics": true, "channels": [6, 8], "enabled": false}
+            "background": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": True, "channels": [1, 8]},
+            "target": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": True, "channels": [3, 8]}, 
+            "distractor1": {"freq": 860, "amp": 0.15, "duration": 0.05, "harmonics": True, "channels": [6, 8], "enabled": False},
+            "distractor2": {"freq": 1060, "amp": 0.25, "duration": 0.05, "harmonics": True, "channels": [6, 8], "enabled": False},
+            "distractor3": {"freq": 1320, "amp": 0.2, "duration": 0.05, "harmonics": True, "channels": [6, 8], "enabled": False}
         },
         "pulse_duration": 0.05,
         "sample_rate": 44100,
