@@ -53,7 +53,9 @@ void loop() {
 
  if (Serial.available())  {
     char c = Serial.read();  //gets one byte from serial buffer
+    
     if (c == '\n') {
+      Serial.println(command); //prints string to serial port out
       
       // rotation direction
       String dirCmd = command.substring(0, 1);
@@ -71,15 +73,6 @@ void loop() {
       spd = command.substring(ind + 1, command.length()).toInt();
 
       rotate(dir, steps, spd);
-      
-//      Serial.println();
-//      Serial.print("captured String is : "); 
-//      Serial.println(command); //prints string to serial port out
-//      
-//      Serial.println(dir);
-//      Serial.println(steps);
-//      Serial.println(spd);
-           
       command = ""; //clears variable for new input
     }  
     else {     
