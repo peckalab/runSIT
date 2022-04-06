@@ -18,8 +18,8 @@ String command; // input command
 #define pwmB 11
 #define brakeA 9
 #define brakeB 8
-#define dirA 12
-#define dirB 13
+#define dirA 5
+#define dirB 4
 
 // Initialize the stepper library on the motor shield:
 Stepper myStepper = Stepper(stepsPerRevolution, dirA, dirB);
@@ -72,6 +72,8 @@ void loop() {
       // rotation speed
       spd = command.substring(ind + 1, command.length()).toInt();
 
+     
+      
       rotate(dir, steps, spd);
       command = ""; //clears variable for new input
     }  
