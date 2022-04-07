@@ -26,7 +26,7 @@ AccelStepper stepper2 = AccelStepper(1, M2stepPin, M2dirPin);
 
 void setup() {
   pinMode(6, OUTPUT); // Enable - if connected
-  digitalWrite(6, LOW); // Set Enable low
+  pinMode(10, OUTPUT); // Enable - if connected
   
   // Set the motor max and default speed (RPMs):
   stepper1.setMaxSpeed(600);
@@ -52,6 +52,7 @@ void rotate(int dir, int steps, int spd) {
 
     while ((stepper1.currentPosition() != newPos) || (stepper2.currentPosition() != newPos)) {
       digitalWrite(6, LOW); // Set Enable low
+      digitalWrite(10, LOW); // Set Enable low
         
       if (stepper1.currentPosition() != newPos) {
         stepper1.runSpeed();
@@ -65,6 +66,9 @@ void rotate(int dir, int steps, int spd) {
 
 
 void loop() {
+  digitalWrite(6, HIGH); // turn off motor drivers
+  digitalWrite(10, HIGH); // turn off motor drivers
+        
   if (Serial.available())  {
     char c = Serial.read();  //gets one byte from serial buffer
     
