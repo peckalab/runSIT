@@ -1,3 +1,15 @@
+/*
+ * Serial interface:
+ * - activate IR LEDs: 'a'
+ * - deactivate IR LEDs: 'd'
+ * - send command to both motors: '+200:50', where
+ *      - '+' or '-' is the direction (mandatory)
+ *      - '200' is steps to move
+ *      - '50' is a speed
+ *   which reads as "Move 200 steps at a speed of 50 counterclockwise"
+ */
+
+
 // Include the Stepper library:
 #include <AccelStepper.h>
 
@@ -20,6 +32,10 @@ int steps = 0; // number of steps to rotate
 int spd = 20;  // speed in steps per second
 long curPos = 0;  // curent position of the motor
 long newPos = 0;  // curent position of the motor
+unsigned long currTime = 0; // tracking time since the beginning for blinking
+int diodesOn = 0;  // diodes on / off
+int blinkInterval = 3000;  // in millis
+int blinkDuration = 500;   // in millis
 
 String command; // input command
 
@@ -33,8 +49,7 @@ void setup() {
   pinMode(M1diodePin, OUTPUT);
   pinMode(M2diodePin, OUTPUT);
 
-  digitalWrite(M1diodePin, HIGH); // Set diodes to LOW
-  digitalWrite(M2diodePin, HIGH); // Set diodes to LOW
+  updateLEDs();
   
   // Set the motor max and default speed (RPMs):
   stepper1.setMaxSpeed(600);
@@ -59,6 +74,8 @@ void rotate(int dir, int steps, int spd) {
     stepper2.setSpeed(dir * spd);
 
     while ((stepper1.currentPosition() != newPos) || (stepper2.currentPosition() != newPos)) {
+      updateLEDs();
+      
       digitalWrite(6, LOW); // Set Enable low
       digitalWrite(10, LOW); // Set Enable low
         
@@ -72,8 +89,25 @@ void rotate(int dir, int steps, int spd) {
     }
 }
 
+/*
+ * Blink the motor LEDs
+ */
+void updateLEDs() {
+  currTime = millis();
+
+  if ((currTime % blinkInterval < blinkDuration) && (diodesOn == 1))  {
+    digitalWrite(M1diodePin, HIGH); // Set diodes to HIGH
+    digitalWrite(M2diodePin, HIGH); // Set diodes to HIGH
+  } else {
+    digitalWrite(M1diodePin, LOW); // Set diodes to LOW
+    digitalWrite(M2diodePin, LOW); // Set diodes to LOW    
+  }
+}
+
 
 void loop() {
+  updateLEDs();
+  
   digitalWrite(6, HIGH); // turn off motor drivers
   digitalWrite(10, HIGH); // turn off motor drivers
         
@@ -82,23 +116,36 @@ void loop() {
     
     if (c == '\n') {
       //Serial.println(command); // prints string to serial port out
-      
-      // rotation direction
+
       String dirCmd = command.substring(0, 1);
-      if (dirCmd.equals("+")) {
-        dir = 1;
+
+      // turn LEDs on
+      if (dirCmd.equals("a")) {
+        diodesOn = 1;
+
+      // turn LEDs off
+      } else if (dirCmd.equals("d")) {
+        diodesOn = 0;
+
+      // rotate motors
       } else {
-        dir = -1;
+        
+        // rotation direction
+        if (dirCmd.equals("+")) {
+          dir = 1;
+        } else {
+          dir = -1;
+        }
+  
+        // number of steps to rotate
+        ind = command.indexOf(':');
+        steps = command.substring(1, ind).toInt();
+  
+        // rotation speed
+        spd = command.substring(ind + 1, command.length()).toInt();
+  
+        rotate(dir, steps, spd);
       }
-
-      // number of steps to rotate
-      ind = command.indexOf(':');
-      steps = command.substring(1, ind).toInt();
-
-      // rotation speed
-      spd = command.substring(ind + 1, command.length()).toInt();
-
-      rotate(dir, steps, spd);
       command = ""; //clears variable for new input
 
       // output of the current position
