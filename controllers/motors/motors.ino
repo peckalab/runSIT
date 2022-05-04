@@ -1,61 +1,87 @@
 // Include the Stepper library:
-#include <Stepper.h>
+#include <AccelStepper.h>
+
+// Give the motors control pins names:
+#define M1dirPin 4
+#define M1stepPin 5
+
+#define M2dirPin 8
+#define M2stepPin 9
+
+#define M1diodePin 12
+#define M2diodePin 13
 
 // Define number of steps per revolution:
-const int stepsPerRevolution = 20;
 int defaultSpeed = 20;
 int ind = 0;
 
 int dir = 1;   // rotation direction 1 or -1
 int steps = 0; // number of steps to rotate
 int spd = 20;  // speed in steps per second
-
+long curPos = 0;  // curent position of the motor
+long newPos = 0;  // curent position of the motor
 
 String command; // input command
 
-// Give the motor control pins names:
-#define pwmA 3
-#define pwmB 11
-#define brakeA 9
-#define brakeB 8
-#define dirA 5
-#define dirB 4
-
 // Initialize the stepper library on the motor shield:
-Stepper myStepper = Stepper(stepsPerRevolution, dirA, dirB);
+AccelStepper stepper1 = AccelStepper(1, M1stepPin, M1dirPin);
+AccelStepper stepper2 = AccelStepper(1, M2stepPin, M2dirPin);
 
 void setup() {
-  // Set the PWM and brake pins so that the direction pins can be used to control the motor:
-  pinMode(pwmA, OUTPUT);
-  pinMode(pwmB, OUTPUT);
-  pinMode(brakeA, OUTPUT);
-  pinMode(brakeB, OUTPUT);
-  digitalWrite(pwmA, HIGH);
-  digitalWrite(pwmB, HIGH);
-  digitalWrite(brakeA, LOW);
-  digitalWrite(brakeB, LOW);
+  pinMode(6, OUTPUT); // Enable - if connected
+  pinMode(10, OUTPUT);
+  pinMode(M1diodePin, OUTPUT);
+  pinMode(M2diodePin, OUTPUT);
+
+  digitalWrite(M1diodePin, HIGH); // Set diodes to LOW
+  digitalWrite(M2diodePin, HIGH); // Set diodes to LOW
   
-  // Set the motor defaul speed (RPMs):
-  myStepper.setSpeed(defaultSpeed);
+  // Set the motor max and default speed (RPMs):
+  stepper1.setMaxSpeed(600);
+  stepper1.setSpeed(defaultSpeed);
+  stepper1.setCurrentPosition(0);
+
+  stepper2.setMaxSpeed(600);
+  stepper2.setSpeed(defaultSpeed);
+  stepper2.setCurrentPosition(0);
 
   Serial.begin(9600);
 }
 
-
+/*
+ * Rotate 2 motors simultaneously
+ */
 void rotate(int dir, int steps, int spd) {
-      myStepper.setSpeed(spd);
-      myStepper.step(dir * steps);
-      myStepper.setSpeed(defaultSpeed);
+    curPos = stepper1.currentPosition();  // should be same for both motors
+    newPos = curPos + (dir * steps);
+    
+    stepper1.setSpeed(dir * spd);
+    stepper2.setSpeed(dir * spd);
+
+    while ((stepper1.currentPosition() != newPos) || (stepper2.currentPosition() != newPos)) {
+      digitalWrite(6, LOW); // Set Enable low
+      digitalWrite(10, LOW); // Set Enable low
+        
+      if (stepper1.currentPosition() != newPos) {
+        stepper1.runSpeed();
+      }
+      
+      if (stepper2.currentPosition() != newPos) {
+        stepper2.runSpeed();
+      }
+    }
 }
 
 
 void loop() {
-
- if (Serial.available())  {
-    char c = Serial.read();  //gets one byte from serial buffer
+  digitalWrite(6, HIGH); // turn off motor drivers
+  digitalWrite(10, HIGH); // turn off motor drivers
+        
+  if (Serial.available())  {
+    char c = Serial.read();  // gets one byte from serial buffer
     
     if (c == '\n') {
-      Serial.println(command); //prints string to serial port out
+      //Serial.println(command); // prints string to serial port out
       
       // rotation direction
       String dirCmd = command.substring(0, 1);
@@ -72,10 +98,11 @@ void loop() {
       // rotation speed
       spd = command.substring(ind + 1, command.length()).toInt();
 
-     
-      
       rotate(dir, steps, spd);
       command = ""; //clears variable for new input
+
+      // output of the current position
+      Serial.println(stepper1.currentPosition());
     }  
     else {     
       command += c; //makes the string readString
