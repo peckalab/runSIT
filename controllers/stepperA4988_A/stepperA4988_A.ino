@@ -8,6 +8,9 @@
 #define M2dirPin 8
 #define M2stepPin 9
 
+#define M1diodePin 12
+#define M2diodePin 13
+
 // Define number of steps per revolution:
 int defaultSpeed = 20;
 int ind = 0;
@@ -26,7 +29,12 @@ AccelStepper stepper2 = AccelStepper(1, M2stepPin, M2dirPin);
 
 void setup() {
   pinMode(6, OUTPUT); // Enable - if connected
-  pinMode(10, OUTPUT); // Enable - if connected
+  pinMode(10, OUTPUT);
+  pinMode(M1diodePin, OUTPUT);
+  pinMode(M2diodePin, OUTPUT);
+
+  digitalWrite(M1diodePin, HIGH); // Set diodes to LOW
+  digitalWrite(M2diodePin, HIGH); // Set diodes to LOW
   
   // Set the motor max and default speed (RPMs):
   stepper1.setMaxSpeed(600);
@@ -70,10 +78,10 @@ void loop() {
   digitalWrite(10, HIGH); // turn off motor drivers
         
   if (Serial.available())  {
-    char c = Serial.read();  //gets one byte from serial buffer
+    char c = Serial.read();  // gets one byte from serial buffer
     
     if (c == '\n') {
-      //Serial.println(command); //prints string to serial port out
+      //Serial.println(command); // prints string to serial port out
       
       // rotation direction
       String dirCmd = command.substring(0, 1);
