@@ -1,7 +1,6 @@
 /*
  * Serial interface:
- * - activate IR LEDs: 'a'
- * - deactivate IR LEDs: 'd'
+ * - activate / deactivate IR LEDs: 'd'
  * - send command to both motors: '+200:50', where
  *      - '+' or '-' is the direction (mandatory)
  *      - '200' is steps to move
@@ -20,7 +19,7 @@
 #define M2dirPin 8
 #define M2stepPin 9
 
-#define M1diodePin 12
+#define M1diodePin 11
 #define M2diodePin 13
 
 // Define number of steps per revolution:
@@ -120,12 +119,8 @@ void loop() {
       String dirCmd = command.substring(0, 1);
 
       // turn LEDs on
-      if (dirCmd.equals("a")) {
-        diodesOn = 1;
-
-      // turn LEDs off
-      } else if (dirCmd.equals("d")) {
-        diodesOn = 0;
+      if (dirCmd.equals("d")) {
+        diodesOn = (diodesOn == 1) ? 0 : 1;
 
       // rotate motors
       } else {
