@@ -2,7 +2,7 @@
  * Serial interface:
  * - activate / deactivate IR LEDs: 'd'
  * - send command to both motors: '+200:50', where
- *      - '+' or '-' is the direction (mandatory)
+ *      - '+' or '-' is the direction (mandatory), - CW, + CCW
  *      - '200' is steps to move
  *      - '50' is a speed
  *   which reads as "Move 200 steps at a speed of 50 counterclockwise"
