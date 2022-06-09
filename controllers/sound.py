@@ -3,6 +3,9 @@ import time
 from scipy.signal import lfilter
 from functools import reduce
 
+import os
+import threading
+
 
 class SoundController:
     # https://python-sounddevice.readthedocs.io/en/0.3.15/api/streams.html#sounddevice.OutputStream
@@ -145,3 +148,44 @@ class SoundController:
                 
         stream.stop()
         print('Sound stopped')
+
+        
+class ContinuousSoundStream:
+   
+    default_cfg = {
+        'wav_file': os.path.join('..', 'assets', 'stream1.wav'),
+        'chunk_duration': 20,
+        'chunk_offset': 2
+    }
+    
+    def __init__(self, cfg):
+        from scipy.io import wavfile
+        import sounddevice as sd
+
+        self.cfg = cfg
+        self.stopped = False
+        self.samplerate, self.data = wavfile.read(cfg['wav_file'])
+        self.stream = sd.OutputStream(samplerate=self.samplerate, channels=2, dtype=self.data.dtype)
+
+    def start(self):
+        self._th = threading.Thread(target=self.update, args=())
+        self._th.start()
+
+    def stop(self):
+        self.stopped = True
+        self._th.join()
+        print('Continuous sound stream released')
+            
+    def update(self):
+        self.stream.start()
+        print('Continuous sound stream started at %s Hz' % (self.samplerate))
+        
+        offset = int(self.cfg['chunk_offset'] * self.samplerate)
+        chunk =  int(self.cfg['chunk_duration'] * self.samplerate)
+        
+        while not self.stopped:
+            start_idx = offset + np.random.randint(self.data.shape[0] - 2 * offset - chunk)
+            end_idx = start_idx + chunk
+            self.stream.write(self.data[start_idx:end_idx])
+            
+        self.stream.stop()

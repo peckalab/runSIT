@@ -65,6 +65,7 @@
         "iti_distance": 2.0,
         "iti_duration": 20,
         "punishment_duration": 10,
-        "distractor_islands": 0
+        "distractor_islands": 0,
+        "cable_motor_port": "COM13"
     }
 }
