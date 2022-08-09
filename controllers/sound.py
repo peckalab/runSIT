@@ -14,9 +14,9 @@ class SoundController:
         "device": [1, 26],
         "n_channels": 10,
         "sounds": {
-            "noise": {"amp": 0.5, "channels": [6, 8]},
-            "background": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": True, "channels": [1, 8]},
-            "target": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": True, "channels": [3, 8]}, 
+            "noise": {"amp": 0.2, "channels": [6, 8]},
+            "background": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": True, "channels": [3, 8]},
+            "target": {"freq": 1320, "amp": 0.1, "duration": 0.05, "harmonics": True, "channels": [3, 8]}, 
             "distractor1": {"freq": 860, "amp": 0.15, "duration": 0.05, "harmonics": True, "channels": [6, 8], "enabled": False},
             "distractor2": {"freq": 1060, "amp": 0.25, "duration": 0.05, "harmonics": True, "channels": [6, 8], "enabled": False},
             "distractor3": {"freq": 1320, "amp": 0.2, "duration": 0.05, "harmonics": True, "channels": [6, 8], "enabled": False}
@@ -123,7 +123,7 @@ class SoundController:
             f.write("time,id\n")
 
         while status.value > 0:
-            if status.value == 2:  # running state
+            if status.value == 2 or (status.value == 1 and selector.value == -1):  # running state or masking noise
                 t0 = time.time()
                 if t0 < next_beat:
                     #time.sleep(0.0001)  # not to spin the wheels too much
@@ -134,8 +134,9 @@ class SoundController:
                 roving = 10**((np.random.rand() * cfg['roving'] - cfg['roving']/2.0)/20.)
                 roving = roving if int(selector.value) > -1 else 1  # no roving for noise
                 stream.write(sounds[commutator[int(selector.value)]] * roving)
-                with open(cfg['file_path'], 'a') as f:
-                    f.write(",".join([str(x) for x in (t0, selector.value)]) + "\n")
+                if status.value == 2:
+                    with open(cfg['file_path'], 'a') as f:
+                        f.write(",".join([str(x) for x in (t0, selector.value)]) + "\n")
 
                 next_beat += cfg['latency']
                 
