@@ -14,7 +14,7 @@
     "position": {
         "single_agent": true,
         "history_duration": 5,
-        "hd_update_speed": 0.02,
+        "hd_update_speed": 0.04,
         "background_light": "background_light.png",
         "background_dark": "background_dark.png",
         "threshold_light": 60,
