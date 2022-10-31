@@ -17,7 +17,7 @@
         "hd_update_speed": 0.04,
         "background_light": "background_light.png",
         "background_dark": "background_dark.png",
-        "threshold_light": 60,
+        "threshold_light": 45,
         "threshold_dark": 30,
         "min_blob_size": 100,
         "subtract": 1,
