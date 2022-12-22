@@ -190,3 +190,52 @@ class ContinuousSoundStream:
             self.stream.write(self.data[start_idx:end_idx])
             
         self.stream.stop()
+        
+        
+class SoundControllerPR:
+    
+    def __init__(self, status, cfg):
+        import sounddevice as sd  # must be inside the function
+        import numpy as np
+        import time
+        
+        sounds = SoundController.get_tone_stack(cfg)
+
+        sd.default.device = cfg['device']
+        sd.default.samplerate = cfg['sample_rate']
+        self.stream = sd.OutputStream(samplerate=cfg['sample_rate'], channels=cfg['n_channels'], dtype='float32', blocksize=256)
+        self.stream.start()
+        self.timers = []
+        self.status = status
+        self.cfg = cfg
+        
+    def target(self, hd_angle):
+        # TODO define which speakers should play
+        speaker1, speaker2 = 3, 7
+        
+        t0 = time.time()
+        self.stream.write(self.sounds[2])
+        
+        with open(self.cfg['file_path'], 'a') as f:
+            f.write(",".join([str(x) for x in (t0, speaker1, speaker2)]) + "\n")
+        
+    def noise(self):
+        # TODO define which speakers should play
+        t0 = time.time()
+        self.stream.write(sounds[3])
+        
+        with open(self.cfg['file_path'], 'a') as f:
+            f.write(",".join([str(x) for x in (t0, 1)]) + "\n")
+        
+    def play_non_blocking(self, sound_id, hd_angle):
+        if sound_id == 'target':
+            tf = threading.Timer(0, self.target, args=[hd_angle])
+        elif sound_id == 'noise':
+            tf = threading.Timer(0, self.noise, args=[])
+        tf.start()
+        self.timers.append(tf)
+        
+    def stop(self):
+        for t in self.timers:
+            t.cancel()
+        self.stream.stop()
