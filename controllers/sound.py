@@ -74,7 +74,7 @@ class SoundController:
             if key == 'noise' or ('enabled' in snd and not snd['enabled']):
                 continue  # skip noise or unused sounds
                 
-            if snd['harmonics']:
+            if 'harmonics' in snd and snd['harmonics']:
                 tone = cls.get_harm_stack(snd['freq'], snd['duration'], sample_rate=cfg['sample_rate']) * cfg['volume']
             else:
                 tone = cls.get_pure_tone(snd['freq'], snd['duration'], cfg['sample_rate']) * cfg['volume']
@@ -194,40 +194,74 @@ class ContinuousSoundStream:
         
 class SoundControllerPR:
     
+    default_cfg = {
+        "device": [1, 26],
+        "n_channels": 10,
+        "sounds": {
+            "noise": {"amp": 0.2, "duration": 2.0, "channels": [6, 8]},
+            "target": {"freq": 660, "amp": 0.1, "duration": 2.0}, 
+        },
+        "sample_rate": 44100,
+        "volume": 0.7,
+        "file_path": "sounds.csv"
+    }
+        
     def __init__(self, status, cfg):
         import sounddevice as sd  # must be inside the function
         import numpy as np
         import time
-        
-        sounds = SoundController.get_tone_stack(cfg)
 
         sd.default.device = cfg['device']
         sd.default.samplerate = cfg['sample_rate']
         self.stream = sd.OutputStream(samplerate=cfg['sample_rate'], channels=cfg['n_channels'], dtype='float32', blocksize=256)
         self.stream.start()
+
         self.timers = []
         self.status = status
         self.cfg = cfg
         
+        # noise (not assigned to channels)
+        filter_a = np.array([0.0075, 0.0225, 0.0225, 0.0075])
+        filter_b = np.array([1.0000,-2.1114, 1.5768,-0.4053])
+
+        noise = np.random.randn(int(cfg['sounds']['noise']['duration'] * cfg['sample_rate']))
+        noise = lfilter(filter_a, filter_b, noise)
+        noise = noise / np.abs(noise).max() * cfg['sounds']['noise']['amp']
+        noise = noise.astype(np.float32)
+
+        # target (not assigned to channels)
+        snd = cfg['sounds']['target']
+        target = SoundController.get_pure_tone(snd['freq'], snd['duration'], cfg['sample_rate']) * cfg['volume']
+        target = target * SoundController.get_cos_window(target, 0.01, cfg['sample_rate'])  # onset / offset
+        target = target * snd['amp']  # amplitude
+        
+        self.sounds = {'noise': noise, 'target': target}
+        
     def target(self, hd_angle):
         # TODO define which speakers should play
-        speaker1, speaker2 = 3, 7
-        
+        speaker1, speaker2 = 1, 8
+        to_play = np.zeros((len(self.sounds['target']), self.cfg['n_channels']), dtype='float32')
+        for ch in (speaker1, speaker2):
+            to_play[:, ch-1] = self.sounds['target']
+            
         t0 = time.time()
-        self.stream.write(self.sounds[2])
-        
         with open(self.cfg['file_path'], 'a') as f:
-            f.write(",".join([str(x) for x in (t0, speaker1, speaker2)]) + "\n")
+            f.write(",".join([str(x) for x in (t0, 2, speaker1, speaker2)]) + "\n")
+        
+        self.stream.write(to_play)
         
     def noise(self):
-        # TODO define which speakers should play
+        to_play = np.zeros((len(self.sounds['noise']), self.cfg['n_channels']), dtype='float32')
+        for ch in self.cfg['sounds']['noise']['channels']:
+            to_play[:, ch-1] = self.sounds['noise']
+        
         t0 = time.time()
-        self.stream.write(sounds[3])
-        
         with open(self.cfg['file_path'], 'a') as f:
-            f.write(",".join([str(x) for x in (t0, 1)]) + "\n")
+            f.write(",".join([str(x) for x in (t0, -1)]) + "\n")
         
-    def play_non_blocking(self, sound_id, hd_angle):
+        self.stream.write(to_play)
+            
+    def play_non_blocking(self, sound_id, hd_angle=0):
         if sound_id == 'target':
             tf = threading.Timer(0, self.target, args=[hd_angle])
         elif sound_id == 'noise':
