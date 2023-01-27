@@ -5,7 +5,7 @@ from functools import reduce
 
 import os
 import threading
-
+import random
 
 class SoundController:
     # https://python-sounddevice.readthedocs.io/en/0.3.15/api/streams.html#sounddevice.OutputStream
@@ -230,23 +230,38 @@ class SoundControllerPR:
         noise = noise.astype(np.float32)
 
         # target (not assigned to channels)
-        snd = cfg['sounds']['target']
-        target = SoundController.get_pure_tone(snd['freq'], snd['duration'], cfg['sample_rate']) * cfg['volume']
-        target = target * SoundController.get_cos_window(target, 0.01, cfg['sample_rate'])  # onset / offset
-        target = target * snd['amp']  # amplitude
+        sample_rate = cfg['sample_rate']
+        target_cfg = cfg['sounds']['target']
+
+        tone = SoundController.get_pure_tone(target_cfg['freq'], target_cfg['duration'], sample_rate=cfg['sample_rate'])
+        tone = tone * SoundController.get_cos_window(tone, target_cfg['window'], sample_rate=cfg['sample_rate'])
+
+        if target_cfg['number'] > 1:
+            silence = np.zeros( int(target_cfg['iti'] * cfg['sample_rate']) )
+            tone_with_iti = np.concatenate([tone, silence])
+            target = np.concatenate([tone_with_iti for i in range(target_cfg['number'] - 1)])
+            target = np.concatenate([target, tone])
+        else:
+            target = tone
+            
+        target = target * target_cfg['amp']  # amplitude
+       
+        #snd = cfg['sounds']['target']
+        #target = SoundController.get_pure_tone(snd['freq'], snd['duration'], cfg['sample_rate']) * cfg['volume']
+        #target = target * SoundController.get_cos_window(target, 0.01, cfg['sample_rate'])  # onset / offset
+        #target = target * snd['amp']  # amplitude
         
         self.sounds = {'noise': noise, 'target': target}
         
     def target(self, hd_angle):
-        # TODO define which speakers should play
-        speaker1, speaker2 = 1, 8
         to_play = np.zeros((len(self.sounds['target']), self.cfg['n_channels']), dtype='float32')
-        for ch in (speaker1, speaker2):
-            to_play[:, ch-1] = self.sounds['target']
+        channel = random.choice(self.cfg['sounds']['target']['channels'])  # random speaker!
+        
+        to_play[:, channel-1] = self.sounds['target']
             
         t0 = time.time()
         with open(self.cfg['file_path'], 'a') as f:
-            f.write(",".join([str(x) for x in (t0, 2, speaker1, speaker2)]) + "\n")
+            f.write(",".join([str(x) for x in (t0, 2, channel)]) + "\n")
         
         self.stream.write(to_play)
         
