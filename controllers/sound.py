@@ -270,9 +270,10 @@ class SoundControllerPR:
         for ch in self.cfg['sounds']['noise']['channels']:
             to_play[:, ch-1] = self.sounds['noise']
         
+        ch1 = self.cfg['sounds']['noise']['channels'][0]
         t0 = time.time()
         with open(self.cfg['file_path'], 'a') as f:
-            f.write(",".join([str(x) for x in (t0, -1)]) + "\n")
+            f.write(",".join([str(x) for x in (t0, -1, ch1)]) + "\n")
         
         self.stream.write(to_play)
             
