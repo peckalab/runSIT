@@ -56,7 +56,7 @@ class MicrophoneController(FPSTimes):
                         f.write(MicrophoneController.queue.get())
 
                     else:
-                        time.sleep(0.01)
+                        time.sleep(0.005)
                 except KeyboardInterrupt:
                     stream.stop()
                     stream.close()
