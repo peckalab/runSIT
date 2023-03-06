@@ -10,7 +10,8 @@
     "video": {
         "fps": 30,
         "file_path": "video.avi",
-        "save_contours": false
+        "save_contours": false,
+        "csv_path": "video.csv"
     },
     "position": {
         "single_agent": true,

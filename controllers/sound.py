@@ -145,7 +145,7 @@ class SoundController:
             
             else:  # idle state
                 next_beat = time.time() + cfg['latency']
-                time.sleep(0.05)
+                time.sleep(0.005)
                 
         stream.stop()
         print('Sound stopped')
