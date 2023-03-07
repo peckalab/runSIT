@@ -51,7 +51,10 @@ class MicrophoneController(FPSTimes):
                         # start stream if not active yet
                         if not stream.active:
                             print("Audio input stream started.")
+                            t0 = time.time()
                             stream.start()
+                            with open(cfg['csv_path'], 'a') as f:
+                                f.write(",".join([str(x) for x in (t0,)]) + "\n")
 
                         f.write(MicrophoneController.queue.get())
 

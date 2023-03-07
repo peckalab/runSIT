@@ -19,7 +19,8 @@
         "device": 58,
         "number_channels": 4,
         "channel_selectors": [8,9,10,11],
-        "file_path": "audio.mat5"
+        "file_path": "audio.mat5",
+        "csv_path": "microphones.csv"
     },
     "position": {
         "single_agent": true,
