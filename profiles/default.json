@@ -134,6 +134,7 @@
         "punishment_duration": 10,
         "distractor_islands": 1,
         "distractor_fail": false,
-        "enable_motors": false
+        "enable_motors": false,
+        "n_pellets": 1
     }
 }
