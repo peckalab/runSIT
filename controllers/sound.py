@@ -29,6 +29,18 @@ class SoundController:
         "file_path": "sounds.csv"
     }
     
+    commutator = {
+        -1: 'noise',
+        0:  'silence',
+        1:  'background',
+        2:  'target',
+        3:  'distractor1',
+        4:  'distractor2',
+        5:  'distractor3',
+        6:  'distractor4',
+        7:  'distractor5'
+    }
+        
     @classmethod
     def get_pure_tone(cls, freq, duration, sample_rate=44100):
         x = np.linspace(0, duration * freq * 2*np.pi, int(duration*sample_rate), dtype=np.float32)
@@ -90,7 +102,7 @@ class SoundController:
         return sounds
         
     @classmethod
-    def run(cls, selector, status, cfg):
+    def run(cls, selector, status, cfg, commutator):
         """
         selector        mp.Value object to set the sound to be played
         status          mp.Value object to stop the loop
@@ -98,18 +110,6 @@ class SoundController:
         import sounddevice as sd  # must be inside the function
         import numpy as np
         import time
-        
-        commutator = {
-            -1: 'noise',
-            0:  'silence',
-            1:  'background',
-            2:  'target',
-            3:  'distractor1',
-            4:  'distractor2',
-            5:  'distractor3',
-            6:  'distractor4',
-            7:  'distractor5'
-        }
         
         sounds = cls.get_tone_stack(cfg)
 
