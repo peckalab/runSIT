@@ -148,6 +148,7 @@ class SoundController:
                 time.sleep(0.05)
                 
         stream.stop()
+        stream.close()
         print('Sound stopped')
 
         
@@ -190,6 +191,7 @@ class ContinuousSoundStream:
             self.stream.write(self.data[start_idx:end_idx])
             
         self.stream.stop()
+        self.stream.close()
         
         
 class SoundControllerPR:
@@ -289,3 +291,4 @@ class SoundControllerPR:
         for t in self.timers:
             t.cancel()
         self.stream.stop()
+        self.stream.close()
