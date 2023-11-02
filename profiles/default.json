@@ -10,7 +10,23 @@
     "video": {
         "fps": 30,
         "file_path": "video.avi",
-        "save_contours": false
+        "frame_attr_name": "frame_with_infos",
+        "save_contours": false,
+        "csv_path": "video.csv"
+    },
+    "microphones": {
+        "record_audio": false,
+        "sample_rate": 192000,
+        "device": "ASIO Fireface USB",
+        "number_channels": 4,
+        "channel_selectors": [
+            8,
+            9,
+            10,
+            11
+        ],
+        "file_path": "audio.mat5",
+        "csv_path": "microphones.csv"
     },
     "position": {
         "single_agent": true,
@@ -35,17 +51,56 @@
         "flip_y": false
     },
     "sound": {
-        "device": [1, 26],
-        "n_channels": 10,
+        "device": "ASIO Fireface USB",
+        "n_channels": 16,
         "sounds": {
-            "noise": {"amp": 0.2, "channels": [6, 8]},
-            "background": {"freq": 660, "amp": 0.05, "duration": 0.05, "harmonics": true, "channels": [1, 8]},
-            "target": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": true, "channels": [2, 8]}, 
-            "distractor1": {"freq": 660, "amp": 0.05, "duration": 0.05, "harmonics": true, "channels": [3, 8], "enabled": true},
-            "distractor2": {"freq": 660, "amp": 0.1, "duration": 0.05, "harmonics": true, "channels": [2, 8], "enabled": false}
+            "noise": {
+                "amp": 0.2,
+                "channels": [
+                    6
+                ]
+            },
+            "background": {
+                "freq": 660,
+                "amp": 0.05,
+                "duration": 0.05,
+                "harmonics": true,
+                "channels": [
+                    5
+                ]
+            },
+            "target": {
+                "freq": 660,
+                "amp": 0.1,
+                "duration": 0.05,
+                "harmonics": true,
+                "channels": [
+                    4
+                ]
+            },
+            "distractor1": {
+                "freq": 660,
+                "amp": 0.05,
+                "duration": 0.05,
+                "harmonics": true,
+                "channels": [
+                    5
+                ],
+                "enabled": true
+            },
+            "distractor2": {
+                "freq": 660,
+                "amp": 0.1,
+                "duration": 0.05,
+                "harmonics": true,
+                "channels": [
+                    4
+                ],
+                "enabled": false
+            }
         },
         "pulse_duration": 0.05,
-        "sample_rate": 44100,
+        "sample_rate": 192000,
         "latency": 0.25,
         "volume": 0.7,
         "roving": 5.0,
@@ -63,14 +118,23 @@
         "experiment_type": "hippoSIT",
         "MCSArduinoPort": "COM10",
         "file_path": "events.csv",
-        "light_events": [9600, 92400],
+        "light_events": [
+            9600,
+            92400
+        ],
         "phi_max": 45,
-        "timepoints": [9600, 91200, 91800, 92400],
+        "timepoints": [
+            9600,
+            91200,
+            91800,
+            92400
+        ],
         "iti_distance": 2.0,
         "iti_duration": 20,
         "punishment_duration": 10,
         "distractor_islands": 1,
         "distractor_fail": false,
-        "enable_motors": false
+        "enable_motors": false,
+        "n_pellets": 1
     }
 }
