@@ -40,7 +40,7 @@ class SoundController:
         6:  'distractor4',
         7:  'distractor5'
     }
-        
+    
     @classmethod
     def get_pure_tone(cls, freq, duration, sample_rate=44100):
         x = np.linspace(0, duration * freq * 2*np.pi, int(duration*sample_rate), dtype=np.float32)
@@ -65,14 +65,14 @@ class SoundController:
     @classmethod
     def get_tone_stack(cls, cfg):
         # silence
-        silence = np.zeros(9600, dtype='float32')#int(cfg['sample_rate']/1000)
+        silence = np.zeros(2, dtype='float32')
         sounds = {'silence': np.column_stack([silence for x in range(cfg['n_channels'])])}
 
         # noise
         filter_a = np.array([0.0075, 0.0225, 0.0225, 0.0075])
         filter_b = np.array([1.0000,-2.1114, 1.5768,-0.4053])
 
-        noise = np.random.randn(int(cfg['latency'] * cfg['sample_rate']))  # it was 250ms of noise, now use cfg['latency'] instead of hardcoded 0.25
+        noise = np.random.randn(int(0.25 * cfg['sample_rate']))  # 250ms of noise
         noise = lfilter(filter_a, filter_b, noise)
         noise = noise / np.abs(noise).max() * cfg['sounds']['noise']['amp']
         noise = noise.astype(np.float32)
@@ -102,45 +102,28 @@ class SoundController:
         return sounds
         
     @classmethod
-    def scale(cls, orig_s_rate, target_s_rate, orig_data):
-        factor = target_s_rate / orig_s_rate
-        x_orig   = np.linspace(0, int(factor * len(orig_data)), len(orig_data))
-        x_target = np.linspace(0, int(factor * len(orig_data)), int(factor * len(orig_data)))
-        return np.interp(x_target, x_orig, orig_data)
-    
-    @classmethod
     def run(cls, selector, status, cfg, commutator):
         """
         selector        mp.Value object to set the sound to be played
         status          mp.Value object to stop the loop
         """
         import sounddevice as sd  # must be inside the function
-        import soundfile as sf
         import numpy as np
         import time
         
-        # this is a continuous noise shit
-        if cfg['cont_noise']['enabled']:
-#             cont_noise_s_rate, cont_noise_data = wavfile.read(cfg['cont_noise']['filepath'])
-            cont_noise_data, cont_noise_s_rate = sf.read(cfg['cont_noise']['filepath'], dtype='float32')
-            target_s_rate = cfg['sample_rate']
-            orig_s_rate   = cont_noise_s_rate
-            if len(cont_noise_data.shape) > 1:
-                orig_data = cont_noise_data[:, 0]
-            else:
-                orig_data = cont_noise_data
-            cont_noise_target = cls.scale(orig_s_rate, target_s_rate, orig_data) * cfg['cont_noise']['amp']
-            cont_noise_target = cont_noise_data * cfg['cont_noise']['amp']
-            print(cont_noise_data.shape)
-            c_noise_pointer = 0
-            
-            print(cfg['cont_noise']['amp'])
+        import soundfile as sf # chirp changes
         
-        # regular sounds
+        
         sounds = cls.get_tone_stack(cfg)
 
         sd.default.device = cfg['device']
         sd.default.samplerate = cfg['sample_rate']
+        
+        data, fs = sf.read(cfg['wav_file'], dtype='float32') #chirp changes
+        chirp = np.zeros((len(data),cfg['n_channels']),dtype='float32') #chirp changes
+        chirp[:,cfg['sounds']['target']['channels'][0]-1] = 0.07*data #chirp changes, amplitude for chirp=0.07, click=1.0
+        chirp[:,6] = 0.07*data #chirp changes, amplitude for chirp=0.07, click=1.0
+        
         stream = sd.OutputStream(samplerate=cfg['sample_rate'], channels=cfg['n_channels'], dtype='float32', blocksize=256)
         stream.start()
 
@@ -153,33 +136,14 @@ class SoundController:
                 t0 = time.time()
                 if t0 < next_beat:
                     #time.sleep(0.0001)  # not to spin the wheels too much
-                    if stream.write_available > sounds['silence'].shape[0]:
-                        block_to_write = sounds['silence']
-                        if cfg['cont_noise']['enabled']:
-                            if c_noise_pointer + block_to_write.shape[0] > len(cont_noise_target):
-                                c_noise_pointer = 0
-                            cont_noise_block = cont_noise_target[c_noise_pointer:c_noise_pointer + block_to_write.shape[0]]
-                            for ch in cfg['cont_noise']['channels']:
-                                block_to_write[:, ch-1] += cont_noise_block
-                            c_noise_pointer += block_to_write.shape[0]
-
-                        stream.write(block_to_write)  # silence
+                    if stream.write_available > 2:
+                        stream.write(sounds['silence'])  # silence
                     continue
 
                 roving = 10**((np.random.rand() * cfg['roving'] - cfg['roving']/2.0)/20.)
                 roving = roving if int(selector.value) > -1 else 1  # no roving for noise
-                block_to_write = sounds[commutator[int(selector.value)]] * roving  # this is a 2D time x channels
-
-                if cfg['cont_noise']['enabled']:
-                    if c_noise_pointer + block_to_write.shape[0] > len(cont_noise_target):
-                        c_noise_pointer = 0
-                    cont_noise_block = cont_noise_target[c_noise_pointer:c_noise_pointer + block_to_write.shape[0]]
-                    for ch in cfg['cont_noise']['channels']:
-                        block_to_write[:, ch-1] += cont_noise_block
-                    c_noise_pointer += block_to_write.shape[0]
-                    
-                stream.write(block_to_write)
-                
+#                 stream.write(sounds[commutator[int(selector.value)]] * roving) # chirp changes (uncomment->comment)
+                stream.write(chirp) # chirp changes
                 if status.value == 2:
                     with open(cfg['file_path'], 'a') as f:
                         f.write(",".join([str(x) for x in (t0, selector.value)]) + "\n")

@@ -99,6 +99,14 @@
                 "enabled": false
             }
         },
+        "cont_noise": {
+            "filepath": "stream2.wav",
+            "amp": 0.1,
+            "channels": [
+                3
+            ],
+            "enabled": true
+        },
         "pulse_duration": 0.05,
         "sample_rate": 192000,
         "latency": 0.25,
@@ -131,8 +139,10 @@
         ],
         "iti_distance": 2.0,
         "iti_duration": 20,
+        "silence_before": 0,
+        "silence_after": 0,
         "punishment_duration": 10,
-        "distractor_islands": 1,
+        "distractor_islands": 0,
         "distractor_fail": false,
         "enable_motors": false,
         "n_pellets": 1
