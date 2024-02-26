@@ -65,7 +65,8 @@ class SoundController:
     @classmethod
     def get_tone_stack(cls, cfg):
         # silence
-        silence = np.zeros(9600, dtype='float32')#int(cfg['sample_rate']/1000)
+        #silence = np.zeros(9600, dtype='float32')
+        silence = np.zeros(int(cfg['sample_rate']/1000), dtype='float32')
         sounds = {'silence': np.column_stack([silence for x in range(cfg['n_channels'])])}
 
         # noise
@@ -121,8 +122,8 @@ class SoundController:
         
         # this is a continuous noise shit
         if cfg['cont_noise']['enabled']:
-#             cont_noise_s_rate, cont_noise_data = wavfile.read(cfg['cont_noise']['filepath'])
-            cont_noise_data, cont_noise_s_rate = sf.read(cfg['cont_noise']['filepath'], dtype='float32')
+            #cont_noise_s_rate, cont_noise_data = wavfile.read(cfg['cont_noise']['filepath'])
+            cont_noise_data, cont_noise_s_rate = sf.read(cfg['cont_noise']['filepath'], dtype='float32')  # float32!!
             target_s_rate = cfg['sample_rate']
             orig_s_rate   = cont_noise_s_rate
             if len(cont_noise_data.shape) > 1:
@@ -130,8 +131,7 @@ class SoundController:
             else:
                 orig_data = cont_noise_data
             cont_noise_target = cls.scale(orig_s_rate, target_s_rate, orig_data) * cfg['cont_noise']['amp']
-            cont_noise_target = cont_noise_data * cfg['cont_noise']['amp']
-            print(cont_noise_data.shape)
+            #cont_noise_target = cont_noise_data * cfg['cont_noise']['amp']
             c_noise_pointer = 0
             
             print(cfg['cont_noise']['amp'])
@@ -152,9 +152,9 @@ class SoundController:
             if status.value == 2 or (status.value == 1 and selector.value == -1):  # running state or masking noise
                 t0 = time.time()
                 if t0 < next_beat:
-                    #time.sleep(0.0001)  # not to spin the wheels too much
+                    time.sleep(0.0005)  # not to spin the wheels too much
                     if stream.write_available > sounds['silence'].shape[0]:
-                        block_to_write = sounds['silence']
+                        block_to_write = sounds['silence'].copy()  # 2D matrix time x channels
                         if cfg['cont_noise']['enabled']:
                             if c_noise_pointer + block_to_write.shape[0] > len(cont_noise_target):
                                 c_noise_pointer = 0
@@ -186,8 +186,8 @@ class SoundController:
 
                 next_beat += cfg['latency']
                 
-                if stream.write_available > 2:
-                    stream.write(sounds['silence'])  # silence
+                #if stream.write_available > 2:
+                #    stream.write(sounds['silence'])  # silence
             
             else:  # idle state
                 next_beat = time.time() + cfg['latency']
