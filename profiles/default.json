@@ -55,14 +55,14 @@
         "n_channels": 16,
         "sounds": {
             "noise": {
-                "amp": 0.2,
+                "amp": 0.002,
                 "channels": [
                     6
                 ]
             },
             "background": {
                 "freq": 660,
-                "amp": 0.05,
+                "amp": 0.0015,
                 "duration": 0.05,
                 "harmonics": true,
                 "channels": [
@@ -71,7 +71,7 @@
             },
             "target": {
                 "freq": 660,
-                "amp": 0.1,
+                "amp": 0.0015,
                 "duration": 0.05,
                 "harmonics": true,
                 "channels": [
@@ -80,7 +80,7 @@
             },
             "distractor1": {
                 "freq": 660,
-                "amp": 0.05,
+                "amp": 0.0015,
                 "duration": 0.05,
                 "harmonics": true,
                 "channels": [
@@ -90,7 +90,7 @@
             },
             "distractor2": {
                 "freq": 660,
-                "amp": 0.1,
+                "amp": 0.0015,
                 "duration": 0.05,
                 "harmonics": true,
                 "channels": [
@@ -101,11 +101,11 @@
         },
         "cont_noise": {
             "filepath": "stream2.wav",
-            "amp": 0.1,
+            "amp": 0.001,
             "channels": [
                 3
             ],
-            "enabled": true
+            "enabled": false
         },
         "pulse_duration": 0.05,
         "sample_rate": 192000,

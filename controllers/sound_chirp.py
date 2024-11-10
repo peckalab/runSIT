@@ -102,7 +102,7 @@ class SoundController:
         return sounds
         
     @classmethod
-    def run(cls, selector, status, cfg, commutator):
+    def run(cls, selector, status, cfg):
         """
         selector        mp.Value object to set the sound to be played
         status          mp.Value object to stop the loop
@@ -113,6 +113,17 @@ class SoundController:
         
         import soundfile as sf # chirp changes
         
+        commutator = {
+            -1: 'noise',
+            0:  'silence',
+            1:  'background',
+            2:  'target',
+            3:  'distractor1',
+            4:  'distractor2',
+            5:  'distractor3',
+            6:  'distractor4',
+            7:  'distractor5'
+        }
         
         sounds = cls.get_tone_stack(cfg)
 
