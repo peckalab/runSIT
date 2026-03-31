@@ -12,7 +12,8 @@
         "file_path": "video.avi",
         "frame_attr_name": "frame_with_infos",
         "save_contours": false,
-        "csv_path": "video.csv"
+        "csv_path": "video.csv",
+        "display_sound_in_island": false
     },
     "microphones": {
         "record_audio": false,
@@ -42,6 +43,7 @@
         "arena_y": 372,
         "arena_radius": 315,
         "floor_radius": 284,
+        "track_floor_only": false,
         "max_fps": 50,
         "file_path": "positions.csv",
         "contour_path": "contours.csv",
@@ -137,6 +139,9 @@
             91800,
             92400
         ],
+        "trial_switch_lights": [
+            500
+        ],
         "iti_distance": 2.0,
         "iti_duration": 20,
         "silence_before": 0,
@@ -144,6 +149,7 @@
         "punishment_duration": 10,
         "distractor_islands": 0,
         "distractor_fail": false,
+        "light_cued_task": false,
         "enable_motors": false,
         "n_pellets": 1
     }
