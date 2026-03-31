@@ -47,12 +47,14 @@ class SoundController:
         return np.sin(x)
 
     @classmethod
-    def get_harm_stack(cls, base_freq, duration, threshold=1500, sample_rate=44100):
-        harmonics = [x * base_freq for x in np.arange(20) + 2 if x * base_freq < threshold]  # first 20 enouch
+    def get_harm_stack(cls, base_freq, duration, threshold=None, sample_rate=44100):
+        if threshold is None:
+            threshold = sample_rate/2. # Nyquist
+        harmonics = [x * base_freq for x in np.arange(10) + 2 if x * base_freq < threshold]  # first 20 enouch
         freqs = [base_freq] + harmonics
         x = np.linspace(0, duration, int(sample_rate * duration))
         y = reduce(lambda x, y: x + y, [(1./(i+1)) * np.sin(base_freq * 2 * np.pi * x) for i, base_freq in enumerate(freqs)])
-        return y / y.max()  # norm to -1 to 1
+        return (y / np.max(np.abs(y))).astype(np.float32)  # norm to -1 to 1
     
     @classmethod
     def get_cos_window(cls, tone, win_duration, sample_rate=44100):
@@ -96,7 +98,10 @@ class SoundController:
             
             sound = np.zeros([len(tone), cfg['n_channels']], dtype='float32')
             for j in snd['channels']:
-                sound[:, j-1] = tone
+                if j in [7, 8]:
+                    sound[:, j-1] = tone * 10
+                else:
+                    sound[:, j-1] = tone
            
             sounds[key] = sound
 
