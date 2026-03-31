@@ -1,0 +1,171 @@
+{
+    "camera": {
+        "source": 0,
+        "frame_width": 1024,
+        "frame_height": 768,
+        "fps": 30,
+        "api": 700,
+        "verbose": true
+    },
+    "video": {
+        "fps": 30,
+        "file_path": "video.avi",
+        "frame_attr_name": "frame_with_infos",
+        "save_contours": false,
+        "csv_path": "video.csv",
+        "display_sound_in_island": false
+    },
+    "microphones": {
+        "record_audio": false,
+        "sample_rate": 192000,
+        "device": "ASIO Fireface USB",
+        "number_channels": 4,
+        "channel_selectors": [
+            8,
+            9,
+            10,
+            11
+        ],
+        "file_path": "audio.mat5",
+        "csv_path": "microphones.csv"
+    },
+    "position": {
+        "single_agent": true,
+        "history_duration": 5,
+        "hd_update_speed": 0.04,
+        "background_light": "background_light.png",
+        "background_dark": "background_dark.png",
+        "threshold_light": 45,
+        "threshold_dark": 30,
+        "min_blob_size": 100,
+        "subtract": 1,
+        "arena_x": 524,
+        "arena_y": 372,
+        "arena_radius": 315,
+        "floor_radius": 284,
+        "track_floor_only": false,
+        "max_fps": 50,
+        "file_path": "positions.csv",
+        "contour_path": "contours.csv",
+        "floor_r_in_meters": 0.46,
+        "angle_compensation": 90,
+        "flip_x": true,
+        "flip_y": false
+    },
+    "sound": {
+        "device": "ASIO Fireface USB",
+        "n_channels": 16,
+        "sounds": {
+            "noise": {
+                "amp": 0.2,
+                "channels": [
+                    6
+                ]
+            },
+            "background": {
+                "freq": 660,
+                "amp": 0.05,
+                "duration": 0.05,
+                "harmonics": true,
+                "channels": [
+                    5
+                ]
+            },
+            "target": {
+                "freq": 660,
+                "amp": 0.1,
+                "duration": 0.05,
+                "harmonics": true,
+                "channels": [
+                    4
+                ]
+            },
+            "distractor1": {
+                "freq": 660,
+                "amp": 0.05,
+                "duration": 0.05,
+                "harmonics": true,
+                "channels": [
+                    5
+                ],
+                "enabled": true
+            },
+            "distractor2": {
+                "freq": 660,
+                "amp": 0.1,
+                "duration": 0.05,
+                "harmonics": true,
+                "channels": [
+                    4
+                ],
+                "enabled": false
+            }
+        },
+        "cont_noise": {
+            "filepath": "stream2.wav",
+            "amp": 0.1,
+            "channels": [
+                3
+            ],
+            "enabled": true
+        },
+        "pulse_duration": 0.05,
+        "sample_rate": 192000,
+        "latency": 0.25,
+        "volume": 0.7,
+        "roving": 5.0,
+        "file_path": "sounds.csv"
+    },
+    "experiment": {
+        "trial_number": 100,
+        "session_duration": 3000,
+        "trial_duration": 6000,
+        "target_radius": 0.14,
+        "target_duration": 50.0,
+        "target_angle": "random",
+        "unaudible_profile": 0,
+        "subject": "000000",
+        "experiment_type": "hippoSIT",
+        "MCSArduinoPort": "COM10",
+        "file_path": "events.csv",
+        "light_events": [
+            9600,
+            92400
+        ],
+        "phi_max": 45,
+        "timepoints": [
+            9600,
+            91200,
+            91800,
+            92400
+        ],
+        "trial_switch_lights": [
+            500
+        ],
+        "iti_distance": 2.0,
+        "iti_duration": 20,
+        "silence_before": 0,
+        "silence_after": 0,
+        "punishment_duration": 10,
+        "distractor_islands": 0,
+        "distractor_fail": false,
+        "light_cued_task": false,
+        "enable_motors": false,
+        "n_pellets": 1,
+        "temporal_trigger": false,
+        "distractor_sound_ids": [
+            3,
+            4
+        ],
+        "distractor_probabilities": [
+            0.3333,
+            0.3333
+        ],
+        "run_speed_threshold": 0.04,
+        "run_time_min": 7.0,
+        "run_time_max": 15.0,
+        "post_run_delay": 0.0,
+        "speed_eval_window": 0.5,
+        "speed_hysteresis": 0.10
+    }
+}
