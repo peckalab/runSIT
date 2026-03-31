@@ -181,9 +181,14 @@
             0,
             0
         ],
-        "apa102_idle_color": [
+        "apa102_iti_color": [
             0,
             0,
+            0
+        ],
+        "apa102_foraging_color": [
+            0,
+            255,
             0
         ],
         "apa102_target_color": [
