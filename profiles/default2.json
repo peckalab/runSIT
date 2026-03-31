@@ -167,10 +167,20 @@
         "post_run_delay": 0.0,
         "speed_eval_window": 0.5,
         "speed_hysteresis": 0.10,
+        "apa102_enable": true,
         "apa102_port": "COM14",
         "apa102_baud": 115200,
         "apa102_command_format": "{r},{g},{b}\\n",
         "apa102_startup_sleep": 2.0,
+        "apa102_verbose": true,
+        "apa102_read_ack": true,
+        "apa102_self_test": true,
+        "apa102_self_test_duration": 0.5,
+        "apa102_self_test_color": [
+            255,
+            0,
+            0
+        ],
         "apa102_idle_color": [
             0,
             0,
