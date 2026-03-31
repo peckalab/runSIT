@@ -186,6 +186,16 @@
             0,
             0
         ],
+        "apa102_target_color": [
+            0,
+            0,
+            255
+        ],
+        "apa102_distractor_color": [
+            255,
+            0,
+            0
+        ],
         "apa102_window_color": [
             0,
             0,
