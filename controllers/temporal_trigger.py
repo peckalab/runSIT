@@ -52,6 +52,7 @@ class TemporalTrigger:
         """
         just_started = False
         just_ended = False
+        just_armed_delay = False
 
         # Window end check
         if self.in_window:
@@ -62,6 +63,8 @@ class TemporalTrigger:
                 'in_window': self.in_window,
                 'just_started': False,
                 'just_ended': just_ended,
+                'pending_delay': self.pending_delay,
+                'just_armed_delay': False,
                 'sound_id': self.current_sound_id if self.in_window else None,
                 'window_start': self.window_start,
                 'time_above_thr': self.time_above_thr,
@@ -95,6 +98,7 @@ class TemporalTrigger:
             if (not self.pending_delay) and (self.time_above_thr >= self.required_run_time):
                 self.pending_delay = True
                 self.delay_end = elapsed_t + self.post_run_delay
+                just_armed_delay = True
 
         # start window after fixed delay (not canceled by slowing)
         if self.pending_delay and elapsed_t >= self.delay_end:
@@ -111,6 +115,8 @@ class TemporalTrigger:
             'in_window': self.in_window,
             'just_started': just_started,
             'just_ended': False,
+            'pending_delay': self.pending_delay,
+            'just_armed_delay': just_armed_delay,
             'sound_id': self.current_sound_id if self.in_window else None,
             'window_start': self.window_start if self.in_window else None,
             'time_above_thr': self.time_above_thr,
