@@ -65,7 +65,7 @@ class TemporalTrigger:
                 'just_ended': just_ended,
                 'pending_delay': self.pending_delay,
                 'just_armed_delay': False,
-                'sound_id': self.current_sound_id if self.in_window else None,
+                'sound_id': self.current_sound_id,
                 'window_start': self.window_start,
                 'time_above_thr': self.time_above_thr,
                 'required_run_time': self.required_run_time
@@ -99,6 +99,8 @@ class TemporalTrigger:
                 self.pending_delay = True
                 self.delay_end = elapsed_t + self.post_run_delay
                 just_armed_delay = True
+                # choose sound_id NOW so LED shows correct color during delay
+                self._choose_sound_id()
 
         # start window after fixed delay (not canceled by slowing)
         if self.pending_delay and elapsed_t >= self.delay_end:
@@ -117,7 +119,7 @@ class TemporalTrigger:
             'just_ended': False,
             'pending_delay': self.pending_delay,
             'just_armed_delay': just_armed_delay,
-            'sound_id': self.current_sound_id if self.in_window else None,
+            'sound_id': self.current_sound_id,  # return sound_id whether in pending_delay or in_window
             'window_start': self.window_start if self.in_window else None,
             'time_above_thr': self.time_above_thr,
             'required_run_time': self.required_run_time
@@ -141,14 +143,17 @@ class TemporalTrigger:
         dist = sum(d for _, d in self._samples)
         return dist / span
 
-    def _start_window(self, elapsed_t):
+    def _choose_sound_id(self):
+        """Randomly choose target (2) or distractor based on probabilities."""
         events, probs = [], []
         for sid, p in zip(self.distractor_sound_ids, self.distractor_probabilities):
             events.append(sid); probs.append(p)
         target_prob = max(0.0, 1.0 - sum(probs))
         events.append(2); probs.append(target_prob)
-
         self.current_sound_id = random.choices(events, probs)[0]
+
+    def _start_window(self, elapsed_t):
+        # sound_id already chosen during pending_delay, just start timing
         self.window_start = elapsed_t
         self.window_end = elapsed_t + self.target_duration
         self.in_window = True
