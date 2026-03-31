@@ -166,6 +166,20 @@
         "run_time_max": 15.0,
         "post_run_delay": 0.0,
         "speed_eval_window": 0.5,
-        "speed_hysteresis": 0.10
+        "speed_hysteresis": 0.10,
+        "apa102_port": "COM14",
+        "apa102_baud": 115200,
+        "apa102_command_format": "{r},{g},{b}\\n",
+        "apa102_startup_sleep": 2.0,
+        "apa102_idle_color": [
+            0,
+            0,
+            0
+        ],
+        "apa102_window_color": [
+            0,
+            0,
+            255
+        ]
     }
 }
