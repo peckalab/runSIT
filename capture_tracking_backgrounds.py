@@ -3,7 +3,7 @@
 Interactive helper to capture tracking backgrounds for the multimode SIT2 setup.
 
 Usage:
-    python3 capture_tracking_backgrounds.py profiles/default2.json
+    python capture_tracking_backgrounds.py profiles/default2.json
 
 What it does:
     - Opens the camera preview with the arena mask.
@@ -29,18 +29,113 @@ Typical workflow:
 import json
 import os
 import sys
+import threading
 import time
 import multiprocessing as mp
 
 import cv2
-import nbimporter
 
 sys.path.append(os.getcwd())
 sys.path.append(os.path.join(os.getcwd(), "controllers"))
 
-from controllers.camera import WebcamStream
 from controllers.position_multimode import PositionTrackerSingle, PositionTrackerDouble
-from controllers.serial import APA102LEDStrip
+
+
+class WebcamStream:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.frame = None
+        self.stopped = False
+        self.stream = cv2.VideoCapture(cfg["source"], cfg["api"]) if cfg.get("api") else cv2.VideoCapture(cfg["source"])
+        self.stream.set(cv2.CAP_PROP_FPS, cfg["fps"])
+        time.sleep(1.5)
+        self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, cfg["frame_width"])
+        self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg["frame_height"])
+        self.stream.set(cv2.CAP_PROP_FPS, cfg["fps"])
+        self.stream.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc("M", "J", "P", "G"))
+
+    def start(self):
+        self._th = threading.Thread(target=self.update, args=())
+        self._th.start()
+
+    def update(self):
+        x_res = self.stream.get(cv2.CAP_PROP_FRAME_WIDTH)
+        y_res = self.stream.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        fps = self.stream.get(cv2.CAP_PROP_FPS)
+        print("Webcam stream %s:%s at %.2f FPS started" % (x_res, y_res, fps))
+
+        while not self.stopped:
+            grabbed, frame = self.stream.read()
+            if grabbed:
+                self.frame = frame
+            else:
+                time.sleep(0.01)
+
+        self.stream.release()
+
+    def read(self):
+        return self.frame
+
+    def stop(self):
+        self.stopped = True
+        time.sleep(0.3)
+        self._th.join()
+        print("Camera released")
+
+
+class APA102LEDStrip:
+    def __init__(self, port, baud=115200, timeout=0.1, command_format="{r},{g},{b}\n", startup_sleep=2.0, verbose=False):
+        self.port = port
+        self.baud = baud
+        self.command_format = command_format
+        self.verbose = verbose
+        self.device = None
+
+        if port == "fake":
+            print("APA102LEDStrip: fake mode enabled")
+            return
+
+        import serial
+
+        self.device = serial.Serial(port, baud, timeout=timeout)
+        time.sleep(startup_sleep)
+        self.device.reset_input_buffer()
+        self.device.reset_output_buffer()
+        if self.verbose:
+            print("APA102LEDStrip connected on %s @ %s" % (port, baud))
+
+    @staticmethod
+    def _clamp(value):
+        return max(0, min(255, int(value)))
+
+    def set_color(self, r, g, b, read_ack=False):
+        r = self._clamp(r)
+        g = self._clamp(g)
+        b = self._clamp(b)
+        cmd = self.command_format.format(r=r, g=g, b=b)
+        if self.device is None:
+            print("APA102LEDStrip(fake): %s" % cmd.strip())
+            return
+        self.device.write(cmd.encode("utf-8"))
+        self.device.flush()
+        if self.verbose:
+            print("APA102LEDStrip -> %s" % cmd.strip())
+        if read_ack:
+            ack = self.device.readline().decode("utf-8", errors="ignore").strip()
+            if self.verbose:
+                print("APA102LEDStrip <- %s" % ack)
+            return ack
+
+    def off(self, read_ack=False):
+        return self.set_color(0, 0, 0, read_ack=read_ack)
+
+    def exit(self):
+        if self.device is None:
+            return
+        try:
+            self.off()
+        finally:
+            self.device.close()
 
 
 def resolve_asset_path(path):
