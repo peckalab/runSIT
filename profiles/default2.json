@@ -35,8 +35,21 @@
         "hd_update_speed": 0.04,
         "background_light": "background_light.png",
         "background_dark": "background_dark.png",
+        "backgrounds_by_mode": {
+            "iti": "background_iti.png",
+            "foraging": "background_foraging.png",
+            "target": "background_target.png",
+            "distractor": "background_distractor.png"
+        },
         "threshold_light": 45,
         "threshold_dark": 30,
+        "thresholds_by_mode": {
+            "iti": 30,
+            "foraging": 45,
+            "target": 45,
+            "distractor": 45
+        },
+        "tracking_mode": "light",
         "min_blob_size": 100,
         "subtract": 1,
         "arena_x": 524,
