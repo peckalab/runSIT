@@ -7,6 +7,34 @@ import os
 import threading
 import random
 
+import ctypes
+import contextlib
+
+@contextlib.contextmanager
+def windows_timer_resolution(ms=1):
+    winmm = ctypes.WinDLL("winmm")
+    rc = winmm.timeBeginPeriod(ms)
+    if rc != 0:
+        raise OSError(f"timeBeginPeriod({ms}) failed with code {rc}")
+    try:
+        yield
+    finally:
+        winmm.timeEndPeriod(ms)
+
+def wait_until(target_time, spin_threshold=0.0015):
+    clock = time.perf_counter
+    while True:
+        now = clock()
+        remaining = target_time - now
+        if remaining <= 0:
+            return
+        if remaining > spin_threshold:
+            time.sleep(remaining - spin_threshold)
+        else:
+            while clock() < target_time:
+                pass
+            return
+
 class SoundController:
     # https://python-sounddevice.readthedocs.io/en/0.3.15/api/streams.html#sounddevice.OutputStream
     
@@ -120,87 +148,86 @@ class SoundController:
         selector        mp.Value object to set the sound to be played
         status          mp.Value object to stop the loop
         """
-        import sounddevice as sd  # must be inside the function
+        import sounddevice as sd
         import soundfile as sf
         import numpy as np
         import time
-        
-        # this is a continuous noise shit
+
+        clock = time.perf_counter
+
+        # continuous noise
         if cfg['cont_noise']['enabled']:
-            #cont_noise_s_rate, cont_noise_data = wavfile.read(cfg['cont_noise']['filepath'])
-            cont_noise_data, cont_noise_s_rate = sf.read(cfg['cont_noise']['filepath'], dtype='float32')  # float32!!
+            cont_noise_data, cont_noise_s_rate = sf.read(
+                cfg['cont_noise']['filepath'], dtype='float32'
+            )
             target_s_rate = cfg['sample_rate']
-            orig_s_rate   = cont_noise_s_rate
+            orig_s_rate = cont_noise_s_rate
             if len(cont_noise_data.shape) > 1:
                 orig_data = cont_noise_data[:, 0]
             else:
                 orig_data = cont_noise_data
             cont_noise_target = cls.scale(orig_s_rate, target_s_rate, orig_data) * cfg['cont_noise']['amp']
-            #cont_noise_target = cont_noise_data * cfg['cont_noise']['amp']
             c_noise_pointer = 0
-            
-            print(cfg['cont_noise']['amp'])
-        
-        # regular sounds
+
         sounds = cls.get_tone_stack(cfg)
 
         sd.default.device = cfg['device']
         sd.default.samplerate = cfg['sample_rate']
-        stream = sd.OutputStream(samplerate=cfg['sample_rate'], channels=cfg['n_channels'], dtype='float32', blocksize=256)
+        stream = sd.OutputStream(
+            samplerate=cfg['sample_rate'],
+            channels=cfg['n_channels'],
+            dtype='float32',
+            blocksize=256
+        )
         stream.start()
 
-        next_beat = time.time() + cfg['latency']
-        with open(cfg['file_path'], 'w') as f:
-            f.write("time,id\n")
+        try:
+            with windows_timer_resolution(1):
+                next_beat = clock() + cfg['latency']
 
-        while status.value > 0:
-            if status.value == 2 or (status.value == 1 and selector.value == -1):  # running state or masking noise
-                t0 = time.time()
-                if t0 < next_beat:
-                    time.sleep(0.0005)  # not to spin the wheels too much
-                    if stream.write_available > sounds['silence'].shape[0]:
-                        block_to_write = sounds['silence'].copy()  # 2D matrix time x channels
+                with open(cfg['file_path'], 'w') as f:
+                    f.write("time,id\n")
+
+                while status.value > 0:
+                    if status.value == 2 or (status.value == 1 and selector.value == -1):
+                        wait_until(next_beat)
+                        t0 = clock()
+
+                        roving = 10 ** ((np.random.rand() * cfg['roving'] - cfg['roving'] / 2.0) / 20.0)
+                        roving = roving if int(selector.value) > -1 else 1
+                        block_to_write = sounds[commutator[int(selector.value)]].copy() * roving
+
                         if cfg['cont_noise']['enabled']:
                             if c_noise_pointer + block_to_write.shape[0] > len(cont_noise_target):
                                 c_noise_pointer = 0
-                            cont_noise_block = cont_noise_target[c_noise_pointer:c_noise_pointer + block_to_write.shape[0]]
+                            cont_noise_block = cont_noise_target[
+                                c_noise_pointer:c_noise_pointer + block_to_write.shape[0]
+                            ]
                             for ch in cfg['cont_noise']['channels']:
-                                block_to_write[:, ch-1] += cont_noise_block
+                                block_to_write[:, ch - 1] += cont_noise_block
                             c_noise_pointer += block_to_write.shape[0]
 
-                        stream.write(block_to_write)  # silence
-                    continue
+                        stream.write(block_to_write)
 
-                roving = 10**((np.random.rand() * cfg['roving'] - cfg['roving']/2.0)/20.)
-                roving = roving if int(selector.value) > -1 else 1  # no roving for noise
-                block_to_write = sounds[commutator[int(selector.value)]] * roving  # this is a 2D time x channels
+                        if status.value == 2:
+                            with open(cfg['file_path'], 'a') as f:
+                                f.write(f"{t0},{selector.value}\n")
 
-                if cfg['cont_noise']['enabled']:
-                    if c_noise_pointer + block_to_write.shape[0] > len(cont_noise_target):
-                        c_noise_pointer = 0
-                    cont_noise_block = cont_noise_target[c_noise_pointer:c_noise_pointer + block_to_write.shape[0]]
-                    for ch in cfg['cont_noise']['channels']:
-                        block_to_write[:, ch-1] += cont_noise_block
-                    c_noise_pointer += block_to_write.shape[0]
-                    
-                stream.write(block_to_write)
-                
-                if status.value == 2:
-                    with open(cfg['file_path'], 'a') as f:
-                        f.write(",".join([str(x) for x in (t0, selector.value)]) + "\n")
+                        next_beat += cfg['latency']
 
-                next_beat += cfg['latency']
-                
-                #if stream.write_available > 2:
-                #    stream.write(sounds['silence'])  # silence
-            
-            else:  # idle state
-                next_beat = time.time() + cfg['latency']
-                time.sleep(0.005)
-                
-        stream.stop()
-        stream.close()
-        print('Sound stopped')
+                        # catch up if we fell badly behind
+                        now = clock()
+                        if now - next_beat > cfg['latency']:
+                            next_beat = now + cfg['latency']
+
+                    else:
+                        next_beat = clock() + cfg['latency']
+                        time.sleep(0.005)
+
+        finally:
+            stream.stop()
+            stream.close()
+            print('Sound stopped')
 
         
 class ContinuousSoundStream:
