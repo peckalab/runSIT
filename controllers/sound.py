@@ -35,6 +35,15 @@ def wait_until(target_time, spin_threshold=0.0015):
                 pass
             return
 
+def estimate_perf_to_epoch_offset(clock=time.perf_counter, wall_clock=time.time):
+    perf_before = clock()
+    epoch_now = wall_clock()
+    perf_after = clock()
+    return epoch_now - ((perf_before + perf_after) / 2.0)
+
+def perf_counter_to_epoch(perf_time, epoch_offset):
+    return perf_time + epoch_offset
+
 class SoundController:
     # https://python-sounddevice.readthedocs.io/en/0.3.15/api/streams.html#sounddevice.OutputStream
     
@@ -154,6 +163,7 @@ class SoundController:
         import time
 
         clock = time.perf_counter
+        epoch_offset = estimate_perf_to_epoch_offset(clock=clock, wall_clock=time.time)
 
         # continuous noise
         if cfg['cont_noise']['enabled']:
@@ -192,6 +202,7 @@ class SoundController:
                     if status.value == 2 or (status.value == 1 and selector.value == -1):
                         wait_until(next_beat)
                         t0 = clock()
+                        log_time = perf_counter_to_epoch(t0, epoch_offset)
 
                         roving = 10 ** ((np.random.rand() * cfg['roving'] - cfg['roving'] / 2.0) / 20.0)
                         roving = roving if int(selector.value) > -1 else 1
@@ -211,7 +222,7 @@ class SoundController:
 
                         if status.value == 2:
                             with open(cfg['file_path'], 'a') as f:
-                                f.write(f"{t0},{selector.value}\n")
+                                f.write(f"{log_time},{selector.value}\n")
 
                         next_beat += cfg['latency']
 
