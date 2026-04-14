@@ -6,10 +6,13 @@ Usage:
     python capture_tracking_backgrounds.py profiles/default2.json
 
 What it does:
+    - Loads the requested profile on top of `profiles/default2.json`,
+      matching the way SIT2 builds the effective session config.
     - Opens the camera preview with the arena mask.
     - Lets you switch between logical tracking modes used by SIT2:
       `iti`, `foraging`, `target`, `distractor`.
     - If APA102 is configured, it also sets the LED strip to the matching color.
+    - Waits briefly after lighting changes so camera auto-exposure can settle.
     - Saves the current masked frame as the background PNG for the selected mode.
 
 Keys:
@@ -29,58 +32,17 @@ Typical workflow:
 import json
 import os
 import sys
-import threading
 import time
 import multiprocessing as mp
+from copy import deepcopy
 
 import cv2
 
 sys.path.append(os.getcwd())
 sys.path.append(os.path.join(os.getcwd(), "controllers"))
 
+from controllers.camera import WebcamStream
 from controllers.position_multimode import PositionTrackerSingle, PositionTrackerDouble
-
-
-class WebcamStream:
-    def __init__(self, cfg):
-        self.cfg = cfg
-        self.frame = None
-        self.stopped = False
-        self.stream = cv2.VideoCapture(cfg["source"], cfg["api"]) if cfg.get("api") else cv2.VideoCapture(cfg["source"])
-        self.stream.set(cv2.CAP_PROP_FPS, cfg["fps"])
-        time.sleep(1.5)
-        self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, cfg["frame_width"])
-        self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg["frame_height"])
-        self.stream.set(cv2.CAP_PROP_FPS, cfg["fps"])
-        self.stream.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc("M", "J", "P", "G"))
-
-    def start(self):
-        self._th = threading.Thread(target=self.update, args=())
-        self._th.start()
-
-    def update(self):
-        x_res = self.stream.get(cv2.CAP_PROP_FRAME_WIDTH)
-        y_res = self.stream.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        fps = self.stream.get(cv2.CAP_PROP_FPS)
-        print("Webcam stream %s:%s at %.2f FPS started" % (x_res, y_res, fps))
-
-        while not self.stopped:
-            grabbed, frame = self.stream.read()
-            if grabbed:
-                self.frame = frame
-            else:
-                time.sleep(0.01)
-
-        self.stream.release()
-
-    def read(self):
-        return self.frame
-
-    def stop(self):
-        self.stopped = True
-        time.sleep(0.3)
-        self._th.join()
-        print("Camera released")
 
 
 class APA102LEDStrip:
@@ -148,8 +110,16 @@ def resolve_asset_path(path):
 
 
 def load_config(config_path):
+    default_path = os.path.join("profiles", "default2.json")
+    cfg = {}
+    if os.path.exists(default_path):
+        with open(default_path, "r") as f:
+            cfg = json.load(f)
+
     with open(config_path, "r") as f:
-        cfg = json.load(f)
+        local_cfg = json.load(f)
+
+    cfg = merge_config(cfg, local_cfg)
 
     cfg["position"]["background_light"] = resolve_asset_path(cfg["position"]["background_light"])
     cfg["position"]["background_dark"] = resolve_asset_path(cfg["position"]["background_dark"])
@@ -162,6 +132,16 @@ def load_config(config_path):
     cfg["position"]["file_path"] = os.path.join("sessions", "_background_capture_positions.csv")
     cfg["position"]["contour_path"] = os.path.join("sessions", "_background_capture_contours.csv")
     os.makedirs("sessions", exist_ok=True)
+    return cfg
+
+
+def merge_config(default_cfg, local_cfg):
+    cfg = deepcopy(default_cfg)
+    for section, values in local_cfg.items():
+        if isinstance(cfg.get(section), dict) and isinstance(values, dict):
+            cfg[section].update(values)
+        else:
+            cfg[section] = values
     return cfg
 
 
@@ -196,6 +176,92 @@ def select_mode(pt, led_strip, cfg_exp, mode):
         led_strip.set_color(*colors[mode], read_ack=cfg_exp.get("apa102_read_ack", False))
 
 
+def init_led_strip(cfg_exp):
+    if not (cfg_exp.get("apa102_enable", True) and "apa102_port" in cfg_exp):
+        return None
+
+    led_strip = APA102LEDStrip(
+        cfg_exp["apa102_port"],
+        baud=cfg_exp.get("apa102_baud", 115200),
+        command_format=cfg_exp.get("apa102_command_format", "{r},{g},{b}\n"),
+        startup_sleep=cfg_exp.get("apa102_startup_sleep", 2.0),
+        verbose=cfg_exp.get("apa102_verbose", False),
+    )
+
+    idle_color = cfg_exp.get("apa102_idle_color", [0, 0, 0])
+    led_strip.set_color(*idle_color, read_ack=cfg_exp.get("apa102_read_ack", False))
+
+    if cfg_exp.get("apa102_self_test", False):
+        test_color = cfg_exp.get("apa102_self_test_color", [255, 0, 0])
+        led_strip.set_color(*test_color, read_ack=cfg_exp.get("apa102_read_ack", False))
+        time.sleep(cfg_exp.get("apa102_self_test_duration", 0.5))
+        led_strip.set_color(*idle_color, read_ack=cfg_exp.get("apa102_read_ack", False))
+
+    return led_strip
+
+
+def arena_mean(frame, mask):
+    if frame is None:
+        return float("nan")
+
+    if mask.ndim == 3:
+        mask = mask[:, :, 0]
+
+    arena = frame[mask > 0]
+    if arena.size == 0:
+        return float("nan")
+    return float(arena.mean())
+
+
+def camera_exposure_text(vs):
+    stream = getattr(vs, "stream", None)
+    if stream is None:
+        return "Exposure: n/a"
+
+    return "AutoExp: %.2f; Exp: %.2f; Gain: %.2f" % (
+        stream.get(cv2.CAP_PROP_AUTO_EXPOSURE),
+        stream.get(cv2.CAP_PROP_EXPOSURE),
+        stream.get(cv2.CAP_PROP_GAIN),
+    )
+
+
+def settle_remaining(mode_changed_at, settle_seconds):
+    return max(0.0, settle_seconds - (time.time() - mode_changed_at))
+
+
+def wait_until_settled(mode_changed_at, settle_seconds):
+    remaining = settle_remaining(mode_changed_at, settle_seconds)
+    if remaining <= 0:
+        return
+
+    print("Waiting %.1f s for camera auto-exposure to settle..." % remaining)
+    while settle_remaining(mode_changed_at, settle_seconds) > 0:
+        time.sleep(0.05)
+
+
+def wait_for_exposure_stability(vs, pt, mode_changed_at, min_seconds, max_seconds, stable_seconds, stable_delta):
+    samples = []
+    min_deadline = mode_changed_at + min_seconds
+    deadline = mode_changed_at + max_seconds
+
+    while time.time() < deadline:
+        frame = vs.read()
+        if frame is not None:
+            now = time.time()
+            mean = arena_mean(frame, pt.mask)
+            samples.append((now, mean))
+
+            recent = [value for sample_time, value in samples if sample_time >= now - stable_seconds]
+            if now >= min_deadline and len(recent) >= 2 and max(recent) - min(recent) <= stable_delta:
+                print("Camera brightness settled at %.1f" % mean)
+                return
+
+        time.sleep(0.1)
+
+    if samples:
+        print("Camera exposure wait timed out at mean %.1f" % samples[-1][1])
+
+
 def build_tracker(status, vs, cfg):
     if cfg["position"]["single_agent"]:
         return PositionTrackerSingle(status, vs, cfg["position"])
@@ -204,29 +270,32 @@ def build_tracker(status, vs, cfg):
 
 def main():
     config_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join("profiles", "default2.json")
+    if len(sys.argv) <= 1:
+        print("No profile argument provided; using %s" % config_path)
     cfg = load_config(config_path)
     cfg_exp = cfg["experiment"]
+    min_settle_seconds = float(
+        cfg_exp.get("background_capture_min_settle_seconds", cfg_exp.get("background_capture_settle_seconds", 3.0))
+    )
+    max_settle_seconds = max(
+        min_settle_seconds, float(cfg_exp.get("background_capture_max_settle_seconds", max(8.0, min_settle_seconds)))
+    )
+    stable_seconds = float(cfg_exp.get("background_capture_stable_seconds", 1.0))
+    stable_delta = float(cfg_exp.get("background_capture_stable_delta", 0.5))
 
     status = mp.Value("i", 1)
+    led_strip = init_led_strip(cfg_exp)
+
     vs = WebcamStream(cfg["camera"])
     vs.start()
 
     pt = build_tracker(status, vs, cfg)
 
-    led_strip = None
-    if cfg_exp.get("apa102_enable", True) and "apa102_port" in cfg_exp:
-        led_strip = APA102LEDStrip(
-            cfg_exp["apa102_port"],
-            baud=cfg_exp.get("apa102_baud", 115200),
-            command_format=cfg_exp.get("apa102_command_format", "{r},{g},{b}\n"),
-            startup_sleep=cfg_exp.get("apa102_startup_sleep", 2.0),
-            verbose=cfg_exp.get("apa102_verbose", False),
-        )
-
     modes = capture_modes(cfg)
     mode_index = 0
     current_mode = modes[mode_index]
     select_mode(pt, led_strip, cfg_exp, current_mode)
+    mode_changed_at = time.time()
 
     try:
         while True:
@@ -239,10 +308,15 @@ def main():
             preview = masked.copy()
 
             background_path = pt.get_background_path(current_mode, exact=True)
+            remaining = settle_remaining(mode_changed_at, min_settle_seconds)
+            ready_text = "Ready" if remaining <= 0 else "Settling: %.1f s" % remaining
             lines = [
                 f"Mode: {current_mode}",
                 f"Resolved background: {pt.background_mode}",
                 f"Capture path: {background_path}",
+                f"Current mean: {arena_mean(masked, pt.mask):.1f}; loaded bg mean: {arena_mean(pt.background, pt.mask):.1f}",
+                camera_exposure_text(vs),
+                ready_text,
                 "Keys: n/p next-prev mode, 1-4 direct mode, c capture, l light/dark, q quit",
             ]
 
@@ -259,20 +333,39 @@ def main():
                 mode_index = (mode_index + 1) % len(modes)
                 current_mode = modes[mode_index]
                 select_mode(pt, led_strip, cfg_exp, current_mode)
+                mode_changed_at = time.time()
             elif key == ord("p"):
                 mode_index = (mode_index - 1) % len(modes)
                 current_mode = modes[mode_index]
                 select_mode(pt, led_strip, cfg_exp, current_mode)
+                mode_changed_at = time.time()
             elif key in (ord("1"), ord("2"), ord("3"), ord("4")):
                 selected = int(chr(key)) - 1
                 if selected < len(modes):
                     mode_index = selected
                     current_mode = modes[mode_index]
                     select_mode(pt, led_strip, cfg_exp, current_mode)
+                    mode_changed_at = time.time()
             elif key == ord("l"):
                 pt.switch_background()
+                mode_changed_at = time.time()
                 print("Position tracker - ambient light is now", "light" if pt.is_light else "dark")
             elif key == ord("c"):
+                wait_until_settled(mode_changed_at, min_settle_seconds)
+                wait_for_exposure_stability(
+                    vs,
+                    pt,
+                    mode_changed_at,
+                    min_settle_seconds,
+                    max_settle_seconds,
+                    stable_seconds,
+                    stable_delta,
+                )
+                frame = vs.read()
+                if frame is None:
+                    print("No camera frame available; background was not saved")
+                    continue
+                masked = cv2.bitwise_and(src1=frame, src2=pt.mask)
                 saved_to = pt.save_background(masked, mode=current_mode, reload_after=False)
                 print(f"Saved background for {current_mode} to {saved_to}")
                 time.sleep(0.1)
