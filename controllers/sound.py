@@ -2,6 +2,7 @@ import numpy as np
 import time
 from scipy.signal import lfilter
 from functools import reduce
+from queue import Empty, SimpleQueue
 
 import os
 import threading
@@ -44,6 +45,281 @@ def estimate_perf_to_epoch_offset(clock=time.perf_counter, wall_clock=time.time)
 def perf_counter_to_epoch(perf_time, epoch_offset):
     return perf_time + epoch_offset
 
+
+class CallbackAudioEngine:
+
+    def __init__(self, cfg, sounds, commutator):
+        import sounddevice as sd
+        import soundfile as sf
+
+        self.cfg = cfg
+        self.sounds = sounds
+        self.commutator = commutator
+        self.sample_rate = int(cfg['sample_rate'])
+        self.n_channels = int(cfg['n_channels'])
+        self.blocksize = int(cfg.get('callback_blocksize', 512))
+        self.roving_db = float(cfg.get('roving', 0.0))
+        self._sound_cfg = cfg.get('sounds', {})
+        self._state_lock = threading.Lock()
+        self._event_queue = SimpleQueue()
+        self._stream_sample = 0
+        self._pulse_cursor = None
+        self._pulse_signature = None
+        self._samples_until_next_pulse = 0
+        self._rng = np.random.default_rng()
+        self._epoch_offset = estimate_perf_to_epoch_offset(
+            clock=time.perf_counter, wall_clock=time.time
+        )
+        self._cont_noise_cursor = 0
+        self._cont_noise = self._load_continuous_noise(cfg, sf)
+
+        self._state = {
+            'active': False,
+            'sound_key': None,
+            'selector_value': 0,
+            'channels': None,
+            'gain': 1.0,
+            'period_samples': max(1, int(round(float(cfg.get('latency', 0.25)) * self.sample_rate))),
+            'should_log': False,
+        }
+
+        output_selectors = cfg.get('output_channel_selectors')
+        extra_settings = (
+            sd.AsioSettings(channel_selectors=output_selectors)
+            if output_selectors else None
+        )
+
+        sd.default.device = cfg['device']
+        sd.default.samplerate = cfg['sample_rate']
+        self.stream = sd.OutputStream(
+            samplerate=self.sample_rate,
+            device=cfg['device'],
+            channels=self.n_channels,
+            dtype='float32',
+            blocksize=self.blocksize,
+            callback=self._callback,
+            extra_settings=extra_settings,
+        )
+
+    @staticmethod
+    def _load_continuous_noise(cfg, soundfile_module):
+        cont_noise_cfg = cfg.get('cont_noise', {})
+        if not cont_noise_cfg.get('enabled'):
+            return None
+
+        cont_noise_data, cont_noise_s_rate = soundfile_module.read(
+            cont_noise_cfg['filepath'], dtype='float32'
+        )
+        if cont_noise_data.ndim > 1:
+            cont_noise_data = cont_noise_data[:, 0]
+
+        if int(cont_noise_s_rate) != int(cfg['sample_rate']):
+            cont_noise_data = SoundController.scale(
+                cont_noise_s_rate, cfg['sample_rate'], cont_noise_data
+            )
+
+        return np.asarray(cont_noise_data * cont_noise_cfg['amp'], dtype='float32')
+
+    def start(self):
+        self.stream.start()
+
+    def stop(self):
+        self.stream.stop()
+        self.stream.close()
+
+    def update_state(
+        self,
+        *,
+        active=None,
+        sound_key=None,
+        selector_value=None,
+        channels=None,
+        gain=None,
+        period_seconds=None,
+        should_log=None,
+    ):
+        with self._state_lock:
+            if active is not None:
+                self._state['active'] = bool(active)
+            if sound_key is not None or active is False:
+                self._state['sound_key'] = sound_key
+            if selector_value is not None:
+                self._state['selector_value'] = int(selector_value)
+            if channels is not None:
+                self._state['channels'] = list(channels)
+            if gain is not None:
+                self._state['gain'] = float(gain)
+            if period_seconds is not None:
+                self._state['period_samples'] = max(
+                    1, int(round(float(period_seconds) * self.sample_rate))
+                )
+            if should_log is not None:
+                self._state['should_log'] = bool(should_log)
+
+    def drain_events(self):
+        events = []
+        while True:
+            try:
+                events.append(self._event_queue.get_nowait())
+            except Empty:
+                break
+        return events
+
+    def _callback(self, outdata, frames, stream_time, status):
+        if status:
+            print(status)
+
+        outdata.fill(0.0)
+
+        with self._state_lock:
+            state = dict(self._state)
+
+        self._render_continuous_noise(outdata, frames)
+
+        if state['active'] and state['sound_key'] is not None:
+            self._render_pulsed_sound(outdata, state)
+        else:
+            self._pulse_cursor = None
+
+        self._stream_sample += frames
+
+    def _render_continuous_noise(self, outdata, frames):
+        cont_noise_cfg = self.cfg.get('cont_noise', {})
+        if self._cont_noise is None or not cont_noise_cfg.get('channels'):
+            return
+
+        mono = self._loop_array(self._cont_noise, frames, cursor_attr='_cont_noise_cursor')
+        for ch in cont_noise_cfg['channels']:
+            if 1 <= ch <= self.n_channels:
+                outdata[:, ch - 1] += mono
+
+    def _render_pulsed_sound(self, outdata, state):
+        signature = (
+            state['active'],
+            state['sound_key'],
+            tuple(state['channels']) if state['channels'] else None,
+            state['period_samples'],
+            state['selector_value'],
+            state['should_log'],
+        )
+        if signature != self._pulse_signature:
+            self._pulse_signature = signature
+            self._pulse_cursor = None
+            self._samples_until_next_pulse = 0
+
+        frame_idx = 0
+        frames = outdata.shape[0]
+        while frame_idx < frames:
+            if self._pulse_cursor is None:
+                if self._samples_until_next_pulse > 0:
+                    chunk = min(frames - frame_idx, self._samples_until_next_pulse)
+                    self._samples_until_next_pulse -= chunk
+                    frame_idx += chunk
+                    continue
+
+                pulse = self._build_pulse_event(state, frame_idx)
+                self._samples_until_next_pulse = max(0, state['period_samples'])
+                if pulse is None:
+                    continue
+                self._pulse_cursor = pulse
+
+            pulse = self._pulse_cursor
+            remaining = pulse['data'].shape[0] - pulse['cursor']
+            if remaining <= 0:
+                self._pulse_cursor = None
+                continue
+
+            chunk = min(frames - frame_idx, remaining)
+            block = pulse['data'][pulse['cursor']:pulse['cursor'] + chunk]
+            outdata[frame_idx:frame_idx + chunk] += block
+            pulse['cursor'] += chunk
+            self._samples_until_next_pulse = max(0, self._samples_until_next_pulse - chunk)
+            frame_idx += chunk
+
+            if pulse['cursor'] >= pulse['data'].shape[0]:
+                self._pulse_cursor = None
+
+    def _build_pulse_event(self, state, frame_offset):
+        sound_key = state['sound_key']
+        sound = self.sounds.get(sound_key)
+        if sound is None:
+            return None
+
+        data = np.array(sound, copy=True)
+        gain = self._select_gain(sound_key, state['gain'])
+        if gain != 1.0:
+            data *= gain
+
+        channels = self._resolve_channels(sound_key, state['channels'])
+        if channels is not None:
+            data = self._reroute_block(data, channels)
+
+        if state['should_log']:
+            self._event_queue.put((
+                perf_counter_to_epoch(
+                    (self._stream_sample + frame_offset) / self.sample_rate,
+                    self._epoch_offset,
+                ),
+                state['selector_value'],
+            ))
+
+        return {'data': data, 'cursor': 0}
+
+    def _loop_array(self, data, frames, cursor_attr):
+        if data is None or len(data) == 0:
+            return np.zeros(frames, dtype='float32')
+
+        cursor = getattr(self, cursor_attr)
+        out = np.empty(frames, dtype='float32')
+        written = 0
+        total = len(data)
+        while written < frames:
+            remaining = total - cursor
+            chunk = min(frames - written, remaining)
+            out[written:written + chunk] = data[cursor:cursor + chunk]
+            written += chunk
+            cursor = (cursor + chunk) % total
+        setattr(self, cursor_attr, cursor)
+        return out
+
+    def _resolve_channels(self, sound_key, override_channels):
+        if override_channels:
+            return [int(ch) for ch in override_channels]
+
+        sound_cfg = self._sound_cfg.get(sound_key, {})
+        if sound_cfg.get('channels'):
+            return [int(ch) for ch in sound_cfg['channels']]
+
+        active_cols = np.nonzero(self.sounds[sound_key].any(axis=0))[0]
+        return [int(col + 1) for col in active_cols]
+
+    def _reroute_block(self, block, channels):
+        mono = self._block_to_mono(block)
+        routed = np.zeros((block.shape[0], self.n_channels), dtype='float32')
+        self._apply_mono_to_channels(routed, mono, channels)
+        return routed
+
+    @staticmethod
+    def _block_to_mono(block):
+        active_cols = np.nonzero(block.any(axis=0))[0]
+        if len(active_cols) == 0:
+            return np.zeros(block.shape[0], dtype='float32')
+        return block[:, active_cols[0]]
+
+    def _apply_mono_to_channels(self, outdata, mono, channels):
+        if channels is None:
+            return
+        for ch in channels:
+            if 1 <= ch <= self.n_channels:
+                outdata[:, ch - 1] += mono
+
+    def _select_gain(self, sound_key, gain):
+        if sound_key == 'noise' or self.roving_db <= 0.0:
+            return float(gain)
+
+        roving = self._rng.uniform(-self.roving_db / 2.0, self.roving_db / 2.0)
+        return float(gain) * (10.0 ** (roving / 20.0))
+
 class SoundController:
     # https://python-sounddevice.readthedocs.io/en/0.3.15/api/streams.html#sounddevice.OutputStream
     
@@ -61,6 +337,7 @@ class SoundController:
         "pulse_duration": 0.05,
         "sample_rate": 44100,
         "latency": 0.25,
+        "callback_blocksize": 512,
         "volume": 0.7,
         "roving": 5.0,
         "file_path": "sounds.csv"
@@ -157,87 +434,55 @@ class SoundController:
         selector        mp.Value object to set the sound to be played
         status          mp.Value object to stop the loop
         """
-        import sounddevice as sd
-        import soundfile as sf
-        import numpy as np
         import time
 
-        clock = time.perf_counter
-        epoch_offset = estimate_perf_to_epoch_offset(clock=clock, wall_clock=time.time)
-
-        # continuous noise
-        if cfg['cont_noise']['enabled']:
-            cont_noise_data, cont_noise_s_rate = sf.read(
-                cfg['cont_noise']['filepath'], dtype='float32'
-            )
-            target_s_rate = cfg['sample_rate']
-            orig_s_rate = cont_noise_s_rate
-            if len(cont_noise_data.shape) > 1:
-                orig_data = cont_noise_data[:, 0]
-            else:
-                orig_data = cont_noise_data
-            cont_noise_target = cls.scale(orig_s_rate, target_s_rate, orig_data) * cfg['cont_noise']['amp']
-            c_noise_pointer = 0
-
         sounds = cls.get_tone_stack(cfg)
-
-        sd.default.device = cfg['device']
-        sd.default.samplerate = cfg['sample_rate']
-        stream = sd.OutputStream(
-            samplerate=cfg['sample_rate'],
-            channels=cfg['n_channels'],
-            dtype='float32',
-            blocksize=256
-        )
-        stream.start()
+        engine = CallbackAudioEngine(cfg=cfg, sounds=sounds, commutator=commutator)
+        engine.start()
 
         try:
-            with windows_timer_resolution(1):
-                next_beat = clock() + cfg['latency']
+            with open(cfg['file_path'], 'w') as f:
+                f.write("time,id\n")
 
-                with open(cfg['file_path'], 'w') as f:
-                    f.write("time,id\n")
+            while status.value > 0:
+                selector_value = int(selector.value)
+                should_play = status.value == 2 or (status.value == 1 and selector_value == -1)
 
-                while status.value > 0:
-                    if status.value == 2 or (status.value == 1 and selector.value == -1):
-                        wait_until(next_beat)
-                        t0 = clock()
-                        log_time = perf_counter_to_epoch(t0, epoch_offset)
+                if should_play and selector_value in commutator:
+                    sound_key = commutator[selector_value]
+                    sound_cfg = cfg.get('sounds', {}).get(sound_key, {})
+                    engine.update_state(
+                        active=True,
+                        sound_key=sound_key,
+                        selector_value=selector_value,
+                        channels=sound_cfg.get('channels'),
+                        gain=1.0,
+                        period_seconds=sound_cfg.get('period', cfg['latency']),
+                        should_log=(status.value == 2),
+                    )
+                else:
+                    engine.update_state(
+                        active=False,
+                        sound_key=None,
+                        selector_value=selector_value,
+                        should_log=False,
+                    )
 
-                        roving = 10 ** ((np.random.rand() * cfg['roving'] - cfg['roving'] / 2.0) / 20.0)
-                        roving = roving if int(selector.value) > -1 else 1
-                        block_to_write = sounds[commutator[int(selector.value)]].copy() * roving
+                events = engine.drain_events()
+                if events:
+                    with open(cfg['file_path'], 'a') as f:
+                        for event_time, sound_id in events:
+                            f.write(f"{event_time},{sound_id}\n")
 
-                        if cfg['cont_noise']['enabled']:
-                            if c_noise_pointer + block_to_write.shape[0] > len(cont_noise_target):
-                                c_noise_pointer = 0
-                            cont_noise_block = cont_noise_target[
-                                c_noise_pointer:c_noise_pointer + block_to_write.shape[0]
-                            ]
-                            for ch in cfg['cont_noise']['channels']:
-                                block_to_write[:, ch - 1] += cont_noise_block
-                            c_noise_pointer += block_to_write.shape[0]
-
-                        stream.write(block_to_write)
-
-                        if status.value == 2:
-                            with open(cfg['file_path'], 'a') as f:
-                                f.write(f"{log_time},{selector.value}\n")
-
-                        next_beat += cfg['latency']
-
-                        # catch up if we fell badly behind
-                        now = clock()
-                        if now - next_beat > cfg['latency']:
-                            next_beat = now + cfg['latency']
-
-                    else:
-                        next_beat = clock() + cfg['latency']
-                        time.sleep(0.005)
+                time.sleep(0.005)
 
         finally:
-            stream.stop()
-            stream.close()
+            events = engine.drain_events()
+            if events:
+                with open(cfg['file_path'], 'a') as f:
+                    for event_time, sound_id in events:
+                        f.write(f"{event_time},{sound_id}\n")
+            engine.stop()
             print('Sound stopped')
 
         
