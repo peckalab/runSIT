@@ -180,6 +180,8 @@ class CallbackAudioEngine:
             self._render_pulsed_sound(outdata, state)
         else:
             self._pulse_cursor = None
+            self._pulse_signature = None
+            self._samples_until_next_pulse = 0
 
         self._stream_sample += frames
 
@@ -204,8 +206,6 @@ class CallbackAudioEngine:
         )
         if signature != self._pulse_signature:
             self._pulse_signature = signature
-            self._pulse_cursor = None
-            self._samples_until_next_pulse = 0
 
         frame_idx = 0
         frames = outdata.shape[0]
