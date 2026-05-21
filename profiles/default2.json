@@ -185,7 +185,7 @@
             "wrong_led_persistent": 0.0,
             "led_only_no_sound_change": 0.0
         },
-        "apa102_enable": true,
+        "apa102_enable": false,
         "apa102_port": "COM14",
         "apa102_baud": 115200,
         "apa102_command_format": "{r},{g},{b}\\r\\n",
