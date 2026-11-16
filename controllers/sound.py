@@ -28,6 +28,7 @@ DETAIL_COLUMNS = (
     'stream_sample', 'task_time', 'time_source',
 )
 PROTOCOL_COLUMNS = ('time', 'event_code', 'task_time', 'trial_no', 'block_id', 'planned_start_s')
+TARGET_PROTOCOL_COLUMNS = PROTOCOL_COLUMNS + ('target_stimulus_id',)
 PROTOCOL_EVENT_CODES = {
     'session_start': 0, 'pause': 1, 'resume': 2,
     'trial_start': 3, 'block_start': 4, 'session_end': 5,
@@ -63,6 +64,9 @@ def prepare_background_config(cfg):
     Schedule entries: {'start_s': 0, 'variant': 'easy'}.
     Every variant inherits from the ORIGINAL background, never the previous block.
     Block IDs are 1-based; 0 means no scheduled block (idle/baseline).
+    Optional target_variants use the same inheritance and distinct stimulus IDs.
+    Call once before saving the session config; a null random seed is resolved
+    here and retained in the returned config for the notebook AND audio process.
     """
     cfg = copy.deepcopy(cfg)
     variants = cfg.get('background_variants', {})
@@ -122,7 +126,87 @@ def prepare_background_config(cfg):
         time_sources={'1': 'PortAudio DAC time mapped to epoch',
                       '2': 'callback monotonic time plus reported output latency'},
     )
+    _prepare_target_config(cfg, stimuli, allowed, first_id=8 + len(resolved))
     return cfg
+
+
+def _prepare_target_config(cfg, stimuli, allowed, first_id):
+    variants = cfg.get('target_variants', {})
+    selection = cfg.get('target_selection', {})
+    if not isinstance(variants, dict) or not isinstance(selection, dict):
+        raise ValueError('target_variants and target_selection must be objects')
+    if not variants and not selection:
+        return  # Preserve the legacy schema for fixed-target sessions.
+    if not variants or 'target' not in cfg['sounds']:
+        raise ValueError('Random targets require target_variants and sounds.target')
+    if set(selection) - {'mode', 'probabilities', 'seed'}:
+        raise ValueError('Unsupported target_selection fields')
+    if selection.get('mode', 'random') != 'random':
+        raise ValueError('Only target_selection.mode="random" is supported')
+    if any(not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', name)
+           for name in variants):
+        raise ValueError('Target variant names must use letters, digits, underscores or hyphens')
+    names = sorted(variants)
+    probabilities = selection.get('probabilities', {name: 1.0 / len(names) for name in names})
+    if not isinstance(probabilities, dict) or set(probabilities) != set(names):
+        raise ValueError('Target probabilities must name every target variant exactly once')
+    if any(isinstance(p, bool) or not isinstance(p, (int, float)) or
+           not math.isfinite(p) or p < 0 for p in probabilities.values()):
+        raise ValueError('Target probabilities must be finite, nonnegative numbers')
+    total = sum(probabilities.values())
+    if not math.isclose(total, 1.0, rel_tol=0, abs_tol=1e-9):
+        raise ValueError('Target probabilities must sum to 1')
+    probabilities = {name: float(probabilities[name]) / total for name in names}
+    seed = selection.get('seed')
+    if seed is None:
+        seed = random.SystemRandom().getrandbits(32)
+    if type(seed) is not int or not 0 <= seed < 2**32:
+        raise ValueError('Target seed must be null or an integer in [0, 2**32)')
+    resolved = {}
+    for stimulus_id, name in enumerate(names, start=first_id):
+        override = variants[name]
+        if not isinstance(override, dict) or set(override) - allowed:
+            raise ValueError('Unsupported fields in target variant %s' % name)
+        spec = copy.deepcopy(cfg['sounds']['target'])
+        spec.update(copy.deepcopy(override))
+        _validate_background(spec, cfg, 'target_variants.' + name)
+        key = 'target__' + name
+        if key in cfg['sounds']:
+            raise ValueError('Reserved waveform key already exists: ' + key)
+        resolved[name] = dict(stimulus_id=stimulus_id, key=key, sound=spec)
+        stimuli[str(stimulus_id)] = dict(key=key, role_id=2, variant=name, sound=spec)
+    cfg['target_selection'] = dict(mode='random', probabilities=probabilities, seed=seed)
+    cfg['background_protocol'].update(
+        schema_version=2, protocol_log_version=2,
+        target_variants=resolved,
+        target_selection=dict(cfg['target_selection'], enabled=True,
+                              apply_on='trial_start', sampling='independent_per_trial',
+                              rng_algorithm='python.random.Random (MT19937)'),
+    )
+
+
+def _require_target_seed(sound_cfg):
+    if sound_cfg.get('target_variants') and sound_cfg.get('target_selection', {}).get('seed') is None:
+        raise ValueError('Prepare and save the sound config with prepare_background_config before starting random targets')
+
+
+def resolve_sound_stimulus(snapshot, protocol, commutator):
+    """Resolve a latched trial's waveform without drawing or changing state."""
+    role = snapshot['selector_value']
+    block_id = snapshot['block_id']
+    sound_key, stimulus_id = commutator.get(role), role
+    if role == 1 and block_id:
+        if not 1 <= block_id <= len(protocol['blocks']):
+            raise ValueError('Invalid shared BGR block ID: %s' % block_id)
+        block = protocol['blocks'][block_id - 1]
+        sound_key, stimulus_id = block['key'], block['stimulus_id']
+    elif role == 2 and protocol.get('target_selection', {}).get('enabled'):
+        stimulus_id = snapshot.get('target_stimulus_id')
+        valid_ids = {entry['stimulus_id'] for entry in protocol['target_variants'].values()}
+        if stimulus_id not in valid_ids or snapshot.get('trial_no', 0) < 1:
+            raise ValueError('Target requested before a valid per-trial target assignment')
+        sound_key = protocol['stimuli'][str(stimulus_id)]['key']
+    return sound_key, stimulus_id
 
 
 def sound_log_paths(cfg):
@@ -158,7 +242,7 @@ class BackgroundSchedule:
 
 
 class SharedSoundState:
-    """A selector compatible with .value, plus an atomic trial/block snapshot.
+    """A selector compatible with .value, plus an atomic trial/block/target snapshot.
 
     The same lock protects role, block and trial. A reader can never observe the
     new trial's BGR request paired with the previous trial's block.
@@ -166,7 +250,7 @@ class SharedSoundState:
     def __init__(self, context=None):
         import multiprocess as mp
         context = mp if context is None else context
-        self._data = context.Array('d', [1, 0, 0, float('nan'), float('nan')], lock=True)
+        self._data = context.Array('d', [1, 0, 0, float('nan'), float('nan'), 2], lock=True)
 
     @property
     def value(self):
@@ -182,27 +266,56 @@ class SharedSoundState:
         with self._data.get_lock():
             self._data[3:5] = [epoch, monotonic]
 
-    def start_trial(self, block_id, trial_no):
+    def start_trial(self, block_id, trial_no, target_stimulus_id=2):
         with self._data.get_lock():
             self._data[0:3] = [1, int(block_id), int(trial_no)]
+            self._data[5] = int(target_stimulus_id)
 
     def snapshot(self):
         with self._data.get_lock():
-            role, block, trial, epoch, monotonic = self._data[:]
+            role, block, trial, epoch, monotonic, target = self._data[:]
         return dict(selector_value=int(role), block_id=int(block), trial_no=int(trial),
-                    task_start_epoch=epoch, task_start_perf=monotonic)
+                    task_start_epoch=epoch, task_start_perf=monotonic,
+                    target_stimulus_id=int(target))
 
 
 class TrialBackgroundProtocol:
     """Notebook-side clock, trial latch and event log; no audio or hardware calls."""
     def __init__(self, selector, sound_cfg, silence_before=0):
+        _require_target_seed(sound_cfg)
         self.selector = selector
         self.schedule = BackgroundSchedule(sound_cfg)
+        protocol = self.schedule.protocol
+        self.target_selection = protocol.get('target_selection', {})
+        self.random_targets = bool(self.target_selection.get('enabled'))
+        self._target_variants = protocol.get('target_variants', {})
+        self._target_names = sorted(self._target_variants)
+        self._target_rng = random.Random(self.target_selection['seed']) if self.random_targets else None
+        self.columns = TARGET_PROTOCOL_COLUMNS if self.random_targets else PROTOCOL_COLUMNS
         self.silence_before = float(silence_before)
         self.started = False
         self.path = sound_log_paths(sound_cfg)['protocol']
         with open(self.path, 'w', newline='') as f:
-            csv.writer(f).writerow(PROTOCOL_COLUMNS)
+            csv.writer(f).writerow(self.columns)
+
+    def describe_target(self):
+        stimulus_id = self.selector.snapshot()['target_stimulus_id']
+        entry = self.schedule.protocol['stimuli'].get(str(stimulus_id), {})
+        return dict(stimulus_id=stimulus_id, variant=entry.get('variant', 'fixed'),
+                    sound=entry.get('sound', {}))
+
+    def _draw_target(self):
+        if not self.random_targets:
+            return 2
+        draw, cumulative = self._target_rng.random(), 0.0
+        for name in self._target_names:
+            cumulative += self.target_selection['probabilities'][name]
+            if draw < cumulative:
+                return self._target_variants[name]['stimulus_id']
+        # Only reachable through floating-point rounding at the final boundary.
+        name = next(name for name in reversed(self._target_names)
+                    if self.target_selection['probabilities'][name] > 0)
+        return self._target_variants[name]['stimulus_id']
 
     def task_time(self, perf=None):
         perf = time.perf_counter() if perf is None else perf
@@ -212,9 +325,12 @@ class TrialBackgroundProtocol:
         epoch = time.time() if epoch is None else epoch
         snap = self.selector.snapshot()
         block = self.schedule.describe(snap['block_id'])
+        row = (epoch, PROTOCOL_EVENT_CODES[event], self.task_time(perf),
+               snap['trial_no'], snap['block_id'], block['start_s'])
+        if self.random_targets:
+            row += (snap['target_stimulus_id'],)
         with open(self.path, 'a', newline='') as f:
-            csv.writer(f).writerow((epoch, PROTOCOL_EVENT_CODES[event], self.task_time(perf),
-                                   snap['trial_no'], snap['block_id'], block['start_s']))
+            csv.writer(f).writerow(row)
 
     def start_or_resume(self, epoch=None, perf=None):
         epoch = time.time() if epoch is None else epoch
@@ -231,10 +347,14 @@ class TrialBackgroundProtocol:
         perf = time.perf_counter() if perf is None else perf
         if not self.started:
             raise RuntimeError('Initialize the session clock before starting a trial')
+        previous = self.selector.snapshot()
+        if type(trial_no) is not int or trial_no <= 0 or trial_no < previous['trial_no']:
+            raise ValueError('Trial numbers must be positive, increasing integers')
+        if trial_no == previous['trial_no']:
+            return previous['block_id']  # Never redraw or relatch the same trial.
         block_id = self.schedule.block_at(max(0.0, self.task_time(perf)))
-        previous = self.selector.snapshot()['block_id']
-        self.selector.start_trial(block_id, trial_no)
-        if block_id != previous:
+        self.selector.start_trial(block_id, trial_no, self._draw_target())
+        if block_id != previous['block_id']:
             self.record('block_start', epoch, perf)
         self.record('trial_start', epoch, perf)
         return block_id
@@ -693,12 +813,13 @@ class SoundController:
         Old callers supplying mp.Value and no schedule remain supported.
         Schedule-aware callers must provide SharedSoundState.
         """
+        _require_target_seed(cfg)
         cfg = prepare_background_config(cfg)
         protocol = cfg['background_protocol']
-        if protocol['enabled'] and not hasattr(selector, 'snapshot'):
-            raise ValueError('BGR schedules require SharedSoundState and trial-start notifications')
+        if (protocol['enabled'] or protocol.get('target_selection', {}).get('enabled')) and not hasattr(selector, 'snapshot'):
+            raise ValueError('Sound protocols require SharedSoundState and trial-start notifications')
         playback_cfg = copy.deepcopy(cfg)
-        for variant in protocol['variants'].values():
+        for variant in list(protocol['variants'].values()) + list(protocol.get('target_variants', {}).values()):
             playback_cfg['sounds'][variant['key']] = variant['sound']
         sounds = cls.get_tone_stack(playback_cfg)
         paths = sound_log_paths(cfg)
@@ -730,13 +851,7 @@ class SoundController:
                         recording = status.value == 2
                         should_play = recording or (status.value == 1 and selector_value == -1)
                         block_id = snap['block_id']
-                        sound_key = commutator.get(selector_value)
-                        stimulus_id = selector_value
-                        if selector_value == 1 and block_id:
-                            if not 1 <= block_id <= len(protocol['blocks']):
-                                raise ValueError('Invalid shared BGR block ID: %s' % block_id)
-                            block = protocol['blocks'][block_id - 1]
-                            sound_key, stimulus_id = block['key'], block['stimulus_id']
+                        sound_key, stimulus_id = resolve_sound_stimulus(snap, protocol, commutator)
                         if should_play and sound_key is not None:
                             if sound_key not in sounds:
                                 raise ValueError('Requested sound is missing or disabled: %s' % sound_key)
